@@ -1,0 +1,33 @@
+# Ambiente virtuale
+.venv/
+
+# Cache Python3
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Jupyter
+.ipynb_checkpoints/
+
+# File OS 
+.DS_Store
+Thumbs.db
+
+# Modelli
+models/*
+!models/.gitkeep
+
+# Output
+outputs/*
+!outputs/.gitkeep
+
+# Ignora dati intermedi e processatti
+data/interim/*
+data/processed/*
+
+# Mantieni dati grezzi
+!data/raw/
+
+# VS Code
+.vscode/
