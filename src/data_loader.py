@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Tuple
 
 import pandas as pd
 from sklearn.model_selection import (
@@ -25,18 +24,18 @@ from .config import (
 
 
 def read_csv(path: str | Path) -> pd.DataFrame:
-    """Read a CSV file and return a DataFrame."""
+    """Carica un file CSV controllando che il percorso esista."""
     path = Path(path)
 
     if not path.exists():
-        raise FileNotFoundError(f"File not found: {path}")
+        raise FileNotFoundError(f"File non trovato: {path}")
 
     return pd.read_csv(path)
 
 
-def load_raw_data() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def load_raw_data():
     """
-    Load the four original competition files.
+    Carica i quattro file originali della competizione.
 
     Returns:
         train_values, train_labels, test_values, submission_format
@@ -50,9 +49,7 @@ def load_raw_data() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFr
 
 
 def load_full_train() -> pd.DataFrame:
-    """
-    Load the full training dataset by merging features and labels on building_id.
-    """
+    """Crea il dataset di training completo unendo feature e target."""
     train_values, train_labels, _, _ = load_raw_data()
 
     train = train_values.merge(
@@ -65,15 +62,12 @@ def load_full_train() -> pd.DataFrame:
     return train
 
 
-def load_train_test() -> Tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.DataFrame]:
+def load_train_test():
     """
-    Load train features, target, test features and submission format.
+    Restituisce X, y, test_values e submission_format.
 
-    Returns:
-        X: training features, including building_id
-        y: target series
-        test_values: test features, including building_id
-        submission_format: submission template
+    X mantiene inizialmente building_id.
+    La rimozione dell'identificativo avviene nella fase di preprocessing.
     """
     train = load_full_train()
     _, _, test_values, submission_format = load_raw_data()
@@ -84,161 +78,114 @@ def load_train_test() -> Tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.DataFra
     return X, y, test_values, submission_format
 
 
-def split_holdout(
-    X: pd.DataFrame,
-    y: pd.Series,
-    test_size: float = 0.20,
-    random_state: int = RANDOM_STATE,
-):
-    """Create a simple holdout train/validation split."""
-    return train_test_split(
-        X,
-        y,
-        test_size=test_size,
-        random_state=random_state,
-    )
-
-
-def split_stratified_holdout(
-    X: pd.DataFrame,
-    y: pd.Series,
-    test_size: float = 0.20,
-    random_state: int = RANDOM_STATE,
-):
-    """Create a stratified holdout train/validation split."""
-    return train_test_split(
-        X,
-        y,
-        test_size=test_size,
-        stratify=y,
-        random_state=random_state,
-    )
-
-
-def get_kfold_splits(
-    X: pd.DataFrame,
-    n_splits: int = 5,
-    random_state: int = RANDOM_STATE,
-):
-    """Return K-Fold split indices."""
-    splitter = KFold(
-        n_splits=n_splits,
-        shuffle=True,
-        random_state=random_state,
-    )
-    return list(splitter.split(X))
-
-
-def get_stratified_kfold_splits(
-    X: pd.DataFrame,
-    y: pd.Series,
-    n_splits: int = 5,
-    random_state: int = RANDOM_STATE,
-):
-    """Return Stratified K-Fold split indices."""
-    splitter = StratifiedKFold(
-        n_splits=n_splits,
-        shuffle=True,
-        random_state=random_state,
-    )
-    return list(splitter.split(X, y))
-
-
-def get_shuffle_split_splits(
-    X: pd.DataFrame,
-    n_splits: int = 5,
-    test_size: float = 0.20,
-    random_state: int = RANDOM_STATE,
-):
-    """Return ShuffleSplit indices."""
-    splitter = ShuffleSplit(
-        n_splits=n_splits,
-        test_size=test_size,
-        random_state=random_state,
-    )
-    return list(splitter.split(X))
-
-
-def get_stratified_shuffle_split_splits(
-    X: pd.DataFrame,
-    y: pd.Series,
-    n_splits: int = 5,
-    test_size: float = 0.20,
-    random_state: int = RANDOM_STATE,
-):
-    """Return StratifiedShuffleSplit indices."""
-    splitter = StratifiedShuffleSplit(
-        n_splits=n_splits,
-        test_size=test_size,
-        random_state=random_state,
-    )
-    return list(splitter.split(X, y))
-
-
-def get_group_kfold_splits(
-    X: pd.DataFrame,
-    y: pd.Series,
-    groups,
-    n_splits: int = 5,
-):
-    """
-    Return GroupKFold split indices.
-
-    This is useful if the group structure, for example geographical groups,
-    should be kept separated across folds.
-    """
-    splitter = GroupKFold(n_splits=n_splits)
-    return list(splitter.split(X, y, groups=groups))
-
-
 class DataLoader:
     """
-    Backward-compatible wrapper around the functional API.
+    Classe per caricamento dati e strategie di split.
 
-    This preserves the original idea from the dev branch while exposing cleaner
-    reusable functions for notebooks and scripts.
+    Mantiene l'impostazione originale sviluppata su dev, basata su DataLoader
+    e split_dataset_by_strategy, ma usa i path centralizzati in src/config.py.
     """
 
     def __init__(self):
-        self.train_values_df, self.train_labels_df, self.test_values_df, self.submission_format_df = load_raw_data()
-        self.train_df = load_full_train()
+        self.feature_map_df = None
 
-    def show_info_data(self) -> None:
-        """Print information about the training feature dataset."""
-        print("Training features info:")
+        (
+            self.train_values_df,
+            self.train_labels_df,
+            self.test_values_df,
+            self.submission_format_df,
+        ) = load_raw_data()
+
+        self.train_df = self.train_values_df.merge(
+            self.train_labels_df,
+            on=ID_COL,
+            how="inner",
+            validate="one_to_one",
+        )
+
+    def show_info_data(self):
+        """Mostra informazioni sulle feature del training set."""
+        print("Informazioni sulle feature del training set:")
         self.train_values_df.info()
 
     def split_dataset_by_strategy(self, choice: int):
         """
-        Return split according to a numeric strategy.
+        Divide il dataset secondo una strategia scelta.
 
-        Choices:
-            1: holdout
-            2: stratified holdout
-            3: K-Fold
+        Strategie:
+            1: Holdout split
+            2: Stratified Holdout
+            3: K-Fold Cross Validation
             4: Stratified K-Fold
-            5: ShuffleSplit
-            6: StratifiedShuffleSplit
+            5: Shuffle Split
+            6: Stratified Shuffle Split
         """
         X = self.train_values_df
         y = self.train_labels_df[TARGET_COL]
 
+        # Holdout split
         if choice == 1:
-            return split_holdout(X, y)
+            return train_test_split(
+                X,
+                y,
+                test_size=0.2,
+                random_state=RANDOM_STATE,
+            )
 
+        # Stratified Holdout
         if choice == 2:
-            return split_stratified_holdout(X, y)
+            return train_test_split(
+                X,
+                y,
+                test_size=0.2,
+                stratify=y,
+                random_state=RANDOM_STATE,
+            )
 
+        # K-Fold Cross Validation
         if choice == 3:
-            return get_kfold_splits(X)
+            kf = KFold(
+                n_splits=5,
+                shuffle=True,
+                random_state=RANDOM_STATE,
+            )
+            return list(kf.split(X))
 
+        # Stratified K-Fold
         if choice == 4:
-            return get_stratified_kfold_splits(X, y)
+            skf = StratifiedKFold(
+                n_splits=5,
+                shuffle=True,
+                random_state=RANDOM_STATE,
+            )
+            return list(skf.split(X, y))
 
+        # Shuffle Split
         if choice == 5:
-            return get_shuffle_split_splits(X)
+            ss = ShuffleSplit(
+                n_splits=5,
+                test_size=0.2,
+                random_state=RANDOM_STATE,
+            )
+            return list(ss.split(X))
 
+        # Stratified Shuffle Split
         if choice == 6:
-            return get_stratified_shuffle_split_splits(X, y)
+            sss = StratifiedShuffleSplit(
+                n_splits=5,
+                test_size=0.2,
+                random_state=RANDOM_STATE,
+            )
+            return list(sss.split(X, y))
 
-        raise ValueError("Invalid choice. Use an integer from 1 to 6.")
+        raise ValueError("Scelta non valida. Usa un intero da 1 a 6.")
+
+    def get_group_kfold_splits(self, groups, n_splits: int = 5):
+        """
+        Restituisce split GroupKFold usando gruppi esterni, ad esempio geografici.
+        """
+        X = self.train_values_df
+        y = self.train_labels_df[TARGET_COL]
+
+        gkf = GroupKFold(n_splits=n_splits)
+        return list(gkf.split(X, y, groups=groups))
