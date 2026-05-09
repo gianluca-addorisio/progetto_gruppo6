@@ -241,7 +241,10 @@ La cartella `src/` contiene codice Python riutilizzabile:
 ```text
 src/
 ├── __init__.py
+├── config.py
 ├── data_loader.py
+├── evaluation.py
+├── features.py
 ├── preprocessing.py
 └── utils.py
 ```
@@ -249,7 +252,9 @@ src/
 Obiettivo della cartella `src/`:
 
 - evitare duplicazione di codice nei notebook;
+- centralizzare percorsi e configurazioni del progetto;
 - centralizzare funzioni di caricamento dati;
+- definire feature engineering riutilizzabile;
 - definire funzioni comuni di preprocessing;
 - gestire metriche e utility condivise.
 
@@ -411,7 +416,9 @@ Stato attuale:
 - repository inizializzato;
 - dati originali caricati in `data/raw/`;
 - struttura `data/` aggiornata con `raw/`, `interim/` e `processed/`;
+- struttura `outputs/` predisposta per grafici, metriche e submission;
 - pipeline generale definita;
 - suddivisione preliminare dei task proposta;
-- notebook iniziali in fase di sviluppo.
-
+- notebook 01, 02, 03 e 05 integrati nella base comune;
+- base tecnica in `src/` avviata per data loading, preprocessing, feature engineering, evaluation e utility;
+- notebook 04 e fasi successive in sviluppo su branch dedicati.
