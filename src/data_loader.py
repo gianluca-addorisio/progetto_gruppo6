@@ -35,8 +35,6 @@ class DataLoader:
                 random_state=42
             )
             return X_train, X_validation, y_train, y_validation
-
-
         #Stratified Holdout
         elif choice == 2:
             X_train, X_validation, y_train, y_validation = train_test_split(
@@ -46,35 +44,22 @@ class DataLoader:
                 random_state=42
             )
             return X_train, X_validation, y_train, y_validation
-
-
         #K-Fold Cross Validation
         elif choice == 3:
             kf = KFold(n_splits=5, shuffle=True, random_state=42)
             return list(kf.split(X))
-
-
         #Stratified K-Fold
         elif choice == 4:
             skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
             return list(skf.split(X, y))
-
-
         #Shuffle Split
         elif choice == 5:
             ss = ShuffleSplit(n_splits=5, test_size=0.2, random_state=42)
             return list(ss.split(X))
-
-
         #Stratified Shuffle Split
         elif choice == 6:
             sss = StratifiedShuffleSplit(n_splits=5, test_size=0.2, random_state=42)
             return list(sss.split(X, y))
-
-
-
-
-
         else:
             raise ValueError("Invalid choice. Use 1-7.")
 
