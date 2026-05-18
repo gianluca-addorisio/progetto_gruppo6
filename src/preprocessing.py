@@ -5,6 +5,8 @@ from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from .data_loader import DataLoader
+from .feature_selection import FeatureSelection
 
 from .config import ID_COL, RANDOM_STATE, TARGET_COL
 from .features import (
@@ -136,3 +138,38 @@ def make_model_pipeline(
             ("model", model),
         ]
     )
+
+def preprocess():
+
+    data_loader = DataLoader()
+    X, y = data_loader.load_train_test()
+    X_prepared = prepare_features(X)
+    #scegliere che split applicare
+    #data_loader.split_dataset_by_strategy(3,X_prepared, y)
+    return X_prepared, y
+
+
+if __name__ == "__main__":
+
+    X, y = preprocess()
+    fs = FeatureSelection()
+    #ranking = fs.correlation_matrix(X, y)
+    #print(ranking)
+
+    #x_selected = fs.Relief_selection(X,y)
+
+
+    #final_df_chi2 = fs.chi_square_selection(X, y)
+
+    #print(final_df.head())
+    #final_df_MU = fs.information_gain_selection(X, y)
+    #print(final_df_MU.head())
+    final_df_random_forest = fs.random_forest_selection(X, y)
+    print(final_df_random_forest.head())
+    #latent_df = fs.autoencoder_selection(X)
+
+    #print(latent_df.head())
+
+    df_xgb = fs.xgboost_selection(X, y)
+
+    df_cat = fs.catboost_selection(X, y)

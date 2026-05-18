@@ -48,9 +48,8 @@ def load_raw_data():
     return train_values, train_labels, test_values, submission_format
 
 
-def load_full_train() -> pd.DataFrame:
+def load_full_train(train_values: pd.DataFrame, train_labels: pd.DataFrame) -> pd.DataFrame:
     """Crea il dataset di training completo unendo feature e target."""
-    train_values, train_labels, _, _ = load_raw_data()
 
     train = train_values.merge(
         train_labels,
@@ -60,22 +59,6 @@ def load_full_train() -> pd.DataFrame:
     )
 
     return train
-
-
-def load_train_test():
-    """
-    Restituisce X, y, test_values e submission_format.
-
-    X mantiene inizialmente building_id.
-    La rimozione dell'identificativo avviene nella fase di preprocessing.
-    """
-    train = load_full_train()
-    _, _, test_values, submission_format = load_raw_data()
-
-    X = train.drop(columns=[TARGET_COL])
-    y = train[TARGET_COL]
-
-    return X, y, test_values, submission_format
 
 
 class DataLoader:
@@ -96,19 +79,27 @@ class DataLoader:
             self.submission_format_df,
         ) = load_raw_data()
 
-        self.train_df = self.train_values_df.merge(
-            self.train_labels_df,
-            on=ID_COL,
-            how="inner",
-            validate="one_to_one",
-        )
+        self.train_df = load_full_train(self.train_values_df,self.train_labels_df)
+
+    def load_train_test(self):
+        """
+        Restituisce X, y, test_values e submission_format.
+
+        X mantiene inizialmente building_id.
+        La rimozione dell'identificativo avviene nella fase di preprocessing.
+        """
+
+        X = self.train_df.drop(columns=[TARGET_COL])
+        y = self.train_df[TARGET_COL]
+
+        return X, y
 
     def show_info_data(self):
         """Mostra informazioni sulle feature del training set."""
         print("Informazioni sulle feature del training set:")
         self.train_values_df.info()
 
-    def split_dataset_by_strategy(self, choice: int):
+    def split_dataset_by_strategy(self, choice: int, X: pd.DataFrame, y: pd.Series):
         """
         Divide il dataset secondo una strategia scelta.
 
@@ -120,8 +111,8 @@ class DataLoader:
             5: Shuffle Split
             6: Stratified Shuffle Split
         """
-        X = self.train_values_df
-        y = self.train_labels_df[TARGET_COL]
+        #X = self.train_values_df
+        #y = self.train_labels_df[TARGET_COL]
 
         # Holdout split
         if choice == 1:

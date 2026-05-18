@@ -40,3 +40,5 @@ data/processed/*
 
 # VS Code
 .vscode/
+
+.idea
