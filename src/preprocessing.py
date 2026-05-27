@@ -19,10 +19,8 @@ from .features import (
 def make_one_hot_encoder() -> OneHotEncoder:
     """
     Create a OneHotEncoder compatible with different scikit-learn versions.
-
-    Newer versions use sparse_output, older versions use sparse. Naturally,
-    the parameter name changed because apparently naming things once was too
-    peaceful.
+    Using sparse output to save memory, as high cardinality features 
+    would otherwise crash the system.
     """
     try:
         return OneHotEncoder(handle_unknown="ignore", sparse_output=True)
@@ -60,6 +58,7 @@ def split_train_validation(
     return train_test_split(
         X,
         y,
+
         test_size=test_size,
         random_state=random_state,
         stratify=y,
@@ -70,10 +69,12 @@ def infer_column_groups(X: pd.DataFrame) -> tuple[list[str], list[str]]:
     """
     Infer categorical and numeric columns for preprocessing.
 
-    Geographical IDs are treated as categorical variables, not continuous
-    numerical quantities.
+    Note: All geo_level IDs are excluded from OneHotEncoding because 
+    their high cardinality can cause memory issues, and tree models 
+    handle them well as numeric passthrough.
     """
-    categorical_candidates = CATEGORICAL_FEATURES + GEO_FEATURES
+    # Only use standard categorical features for OHE
+    categorical_candidates = CATEGORICAL_FEATURES
 
     explicit_categorical = [
         col for col in categorical_candidates if col in X.columns
@@ -99,10 +100,6 @@ def build_preprocessor(
 ) -> ColumnTransformer:
     """
     Build a preprocessing transformer for a given feature matrix.
-
-    Args:
-        X: feature matrix after prepare_features.
-        scale_numeric: whether to apply StandardScaler to numeric columns.
     """
     categorical_cols, numeric_cols = infer_column_groups(X)
 
@@ -114,6 +111,7 @@ def build_preprocessor(
             ("numeric", numeric_transformer, numeric_cols),
         ],
         remainder="drop",
+        verbose_feature_names_out=False,
     )
 
     return preprocessor
@@ -144,8 +142,6 @@ def preprocess():
     data_loader = DataLoader()
     X, y = data_loader.load_train_test()
     X_prepared = prepare_features(X)
-    #scegliere che split applicare
-    #data_loader.split_dataset_by_strategy(3,X_prepared, y)
     return X_prepared, y
 
 
@@ -153,23 +149,5 @@ if __name__ == "__main__":
 
     X, y = preprocess()
     fs = FeatureSelection()
-    #ranking = fs.correlation_matrix(X, y)
-    #print(ranking)
-
-    #x_selected = fs.Relief_selection(X,y)
-
-
-    #final_df_chi2 = fs.chi_square_selection(X, y)
-
-    #print(final_df.head())
-    #final_df_MU = fs.information_gain_selection(X, y)
-    #print(final_df_MU.head())
-    final_df_random_forest = fs.random_forest_selection(X, y)
-    print(final_df_random_forest.head())
-    #latent_df = fs.autoencoder_selection(X)
-
-    #print(latent_df.head())
-
-    df_xgb = fs.xgboost_selection(X, y)
-
-    df_cat = fs.catboost_selection(X, y)
+    ranking = fs.high_correlation_features(X)
+    print(ranking)

@@ -34,6 +34,68 @@ class FeatureSelection:
         plot_feature_ranking(ranking, title="Correlation Matrix", save_path="plots/corr_matrix_ranking.png")
         return ranking
 
+
+    def high_correlation_features(
+            self,
+            X: pd.DataFrame,
+            threshold: float = 0.8,
+            save_path: str = "plots/high_correlation_features.csv"
+    ) -> pd.DataFrame:
+        """
+        Compute correlation matrix on X and save only feature pairs
+        with high absolute correlation.
+
+        Parameters
+        ----------
+        X : pd.DataFrame
+            Feature matrix.
+        threshold : float
+            Minimum absolute correlation value.
+        save_path : str
+            Path where the CSV will be saved.
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame containing highly correlated feature pairs.
+        """
+
+        # One-hot encode categorical features
+        X_encoded = pd.get_dummies(X)
+
+        # Correlation matrix
+        corr_matrix = X_encoded.corr()
+
+        # Keep only upper triangle to avoid duplicates
+        upper_triangle = corr_matrix.where(
+            np.triu(np.ones(corr_matrix.shape), k=1).astype(bool)
+        )
+
+        # Extract highly correlated pairs
+        high_corr_pairs = (
+            upper_triangle.stack()
+            .reset_index()
+        )
+
+        high_corr_pairs.columns = ["feature_1", "feature_2", "correlation"]
+
+        # Filter by absolute correlation
+        high_corr_pairs = high_corr_pairs[
+            high_corr_pairs["correlation"].abs() >= threshold
+            ]
+
+        # Sort by absolute correlation descending
+        high_corr_pairs = high_corr_pairs.reindex(
+            high_corr_pairs["correlation"].abs().sort_values(ascending=False).index
+        )
+
+        # Save to CSV
+        high_corr_pairs.to_csv(save_path, index=False)
+
+        return high_corr_pairs
+
+        return corr_matrix
+
     @staticmethod
     def chi_square_selection(X: pd.DataFrame, y: pd.Series, p_value_threshold: float = 0.05):
         # tengo solo colonne numeriche
