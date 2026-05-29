@@ -333,3 +333,37 @@ Alla data di questo documento:
 - `src/` contiene una base funzionante per data loading, feature engineering, preprocessing, evaluation e utility;
 - notebook 05 è stato revisionato come baseline preliminare, ma richiede una piccola correzione per compatibilità con la versione attuale di scikit-learn;
 - le prossime fasi saranno feature selection, model comparison, eventuale PCA e tuning.
+
+---
+
+## 15. Manutenzione repository e pulizia branch
+
+Dopo l'integrazione dei contributi principali nel branch `dev`, il gruppo ha deciso di avviare una pulizia dei branch remoti ormai già mergiati e non più utilizzati.
+
+Questa decisione non riguarda la metodologia di modellazione, ma l'organizzazione operativa del repository. L'obiettivo è mantenere GitHub più leggibile, ridurre ambiguità sui branch attivi e rendere più chiaro quale ramo rappresenti lo stato aggiornato del progetto.
+
+Branch remoti rimossi perché già integrati in `dev`:
+
+- `cleanup/final-integration`: branch di integrazione intermedia usato per raccogliere la struttura comune del progetto, i notebook già revisionati, la documentazione iniziale e le utility condivise.
+- `feature/03-feature-comprehension`: branch relativo al contributo sul notebook 03, dedicato alla comprensione semantica delle feature e alle note operative preliminari.
+- `feature/feature-engineering-selection`: branch relativo al contributo sul notebook 04, alla feature engineering e alla prima versione del decision log metodologico.
+- `feature/feature-selection`: branch relativo al notebook 06 e alla prima analisi di feature selection, poi integrato nel flusso principale di sviluppo.
+
+La rimozione di questi branch non elimina i commit già integrati in `dev`. I commit restano nella history del repository perché fanno parte della cronologia del branch di sviluppo. La cancellazione rimuove soltanto i riferimenti remoti non più operativi.
+
+Branch non rimossi in questa fase:
+
+- `analisi/01-analisi-dati`
+- `preprocessing/02_qualita_dati`
+- `baseline/05-baseline-modeling`
+- `sistemazione-pipeline-progetto`
+
+Questi branch non risultano ancora completamente mergiati in `dev` secondo la cronologia Git, oppure richiedono una verifica ulteriore con i responsabili prima dell'eventuale eliminazione. Per questo motivo vengono mantenuti temporaneamente.
+
+Decisione operativa:
+
+- mantenere `main` come ramo stabile/finale;
+- mantenere `dev` come ramo comune di sviluppo aggiornato;
+- eliminare solo branch già integrati e non più operativi;
+- non cancellare branch con possibile lavoro non ancora verificato;
+- documentare la pulizia per rendere tracciabile l'organizzazione del repository.
