@@ -338,7 +338,7 @@ Alla data di questo documento:
 
 ## 15. Manutenzione repository e pulizia branch
 
-Dopo l'integrazione dei contributi principali nel branch `dev`, il gruppo ha deciso di avviare una pulizia dei branch remoti ormai già mergiati e non più utilizzati.
+Dopo l'integrazione dei contributi principali nel branch `dev`, il gruppo ha deciso di avviare una pulizia dei branch remoti ormai già mergiati, superati o non più operativi.
 
 Questa decisione non riguarda la metodologia di modellazione, ma l'organizzazione operativa del repository. L'obiettivo è mantenere GitHub più leggibile, ridurre ambiguità sui branch attivi e rendere più chiaro quale ramo rappresenti lo stato aggiornato del progetto.
 
@@ -349,21 +349,20 @@ Branch remoti rimossi perché già integrati in `dev`:
 - `feature/feature-engineering-selection`: branch relativo al contributo sul notebook 04, alla feature engineering e alla prima versione del decision log metodologico.
 - `feature/feature-selection`: branch relativo al notebook 06 e alla prima analisi di feature selection, poi integrato nel flusso principale di sviluppo.
 
-La rimozione di questi branch non elimina i commit già integrati in `dev`. I commit restano nella history del repository perché fanno parte della cronologia del branch di sviluppo. La cancellazione rimuove soltanto i riferimenti remoti non più operativi.
+Branch remoti rimossi perché superati dalle versioni presenti in `dev` o non più operativi:
 
-Branch non rimossi in questa fase:
+- `analisi/01-analisi-dati`: branch relativo a una versione precedente del notebook 01. La versione presente in `dev` risulta più aggiornata e completa.
+- `baseline/05-baseline-modeling`: branch relativo a una versione precedente del notebook 05. La versione presente in `dev` contiene modifiche successive e risulta più aggiornata.
+- `preprocessing/02_qualita_dati`: branch relativo al notebook 02. La parte utile, in particolare la sezione finale di riepilogo, viene recuperata manualmente nel notebook presente su `dev`, evitando il merge diretto del branch vecchio.
+- `sistemazione-pipeline-progetto`: branch storico usato per sistemare struttura, README, `.gitignore` e organizzazione iniziale della pipeline. Il contenuto utile risulta ormai superato o già assorbito nella struttura attuale di `dev`.
 
-- `analisi/01-analisi-dati`
-- `preprocessing/02_qualita_dati`
-- `baseline/05-baseline-modeling`
-- `sistemazione-pipeline-progetto`
-
-Questi branch non risultano ancora completamente mergiati in `dev` secondo la cronologia Git, oppure richiedono una verifica ulteriore con i responsabili prima dell'eventuale eliminazione. Per questo motivo vengono mantenuti temporaneamente.
+La rimozione di questi branch non elimina i commit già integrati o recuperati nel progetto. La cancellazione rimuove soltanto riferimenti remoti non più operativi.
 
 Decisione operativa:
 
 - mantenere `main` come ramo stabile/finale;
 - mantenere `dev` come ramo comune di sviluppo aggiornato;
-- eliminare solo branch già integrati e non più operativi;
-- non cancellare branch con possibile lavoro non ancora verificato;
-- documentare la pulizia per rendere tracciabile l'organizzazione del repository.
+- eliminare branch già integrati, superati o non più operativi;
+- recuperare manualmente eventuali contenuti utili prima della cancellazione;
+- non usare merge diretti da branch storici quando rischiano di reintrodurre versioni obsolete dei file.
+
