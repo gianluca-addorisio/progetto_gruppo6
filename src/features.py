@@ -12,9 +12,12 @@ GEO_FEATURES = [
 NUMERIC_FEATURES = [
     "count_floors_pre_eq",
     "age",
-    "area_percentage",
-    "height_percentage",
     "count_families",
+    "building_volume_proxy",
+    "total_secondary_use_count",
+    "total_superstructure_count",
+    "has_fragile_material",
+    "has_engineered_structure",
 ]
 
 CATEGORICAL_FEATURES = [
@@ -24,8 +27,6 @@ CATEGORICAL_FEATURES = [
     "ground_floor_type",
     "other_floor_type",
     "position",
-    "plan_configuration",
-    "legal_ownership_status",
 ]
 
 FRAGILE_MATERIAL_FEATURES = [
@@ -58,10 +59,11 @@ def get_secondary_use_features(df: pd.DataFrame) -> list[str]:
 
 def add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Add simple and interpretable engineered features.
+    Add compact and interpretable engineered features.
 
-    The goal is not to create obscure tricks, but features that can be explained
-    clearly in the report and during the oral presentation.
+    This function creates only the engineered features selected for the final
+    compact feature set. Temporary exploratory transformations are intentionally
+    not created here.
     """
     df = df.copy()
 
@@ -95,14 +97,6 @@ def add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
             df["area_percentage"] * df["height_percentage"]
         )
 
-    if "age" in df.columns:
-        df["age_clipped"] = df["age"].clip(upper=200)
-        df["age_group"] = pd.cut(
-            df["age_clipped"],
-            bins=[-1, 10, 30, 60, 100, 200],
-            labels=["0_10", "11_30", "31_60", "61_100", "100_plus"],
-        ).astype("object")
-
     return df
 
 
@@ -114,7 +108,7 @@ def get_feature_group_summary(df: pd.DataFrame) -> pd.DataFrame:
             "n_features": len([c for c in GEO_FEATURES if c in df.columns]),
         },
         {
-            "group": "numeric_structural",
+            "group": "numeric_and_aggregated",
             "n_features": len([c for c in NUMERIC_FEATURES if c in df.columns]),
         },
         {
@@ -122,11 +116,11 @@ def get_feature_group_summary(df: pd.DataFrame) -> pd.DataFrame:
             "n_features": len([c for c in CATEGORICAL_FEATURES if c in df.columns]),
         },
         {
-            "group": "superstructure_binary",
+            "group": "superstructure_binary_original",
             "n_features": len(get_superstructure_features(df)),
         },
         {
-            "group": "secondary_use_binary",
+            "group": "secondary_use_binary_original",
             "n_features": len(get_secondary_use_features(df)),
         },
     ]
