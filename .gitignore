@@ -43,4 +43,4 @@ data/processed/*
 
 .idea
 
-catboost_info
+catboost_info/*
