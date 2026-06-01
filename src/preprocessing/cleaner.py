@@ -3,41 +3,62 @@ from sklearn.base import BaseEstimator, TransformerMixin
 
 class DataCleaner(BaseEstimator, TransformerMixin):
     """
-    Esegue operazioni di pulizia generale sul dataset.
+    Esegue operazioni di pulizia e pruning (rimozione feature) sul dataset.
     
-    RECUPERATO DA: src/preprocessing.py (prepare_features) e logiche sparse in op_*.py
+    RECUPERATO DA: src/preprocessing.py (prepare_features)
     
-    GIUSTIFICAZIONE:
-    Centralizziamo le operazioni di "base" che devono avvenire prima di qualsiasi trasformazione:
-    1. Rimozione di colonne inutili come 'building_id' (che è un identificativo, non una feature).
-    2. Rimozione accidentale del target se presente nel DataFrame delle feature.
-    3. Gestione di eventuali valori nulli (Simple Imputation come fallback di sicurezza).
+    Operazioni:
+    1. Rimozione di identificativi e target.
+    2. Rimozione di feature ridondanti (sostituite da engineered features).
+    3. Rimozione di feature a bassa informatività selezionate nella nuova strategia.
+    4. Imputazione di sicurezza per valori nulli.
     """
     
-    def __init__(self, cols_to_drop=['building_id', 'damage_grade']):
-        self.cols_to_drop = cols_to_drop
+    def __init__(self, additional_cols_to_drop=None):
+        # Feature da rimuovere fisse (da src/preprocessing.py)
+        self.final_drop_features = [
+            'building_id', 
+            'damage_grade',
+            "area_percentage",
+            "height_percentage",
+            "age_clipped",
+            "age_group",
+            "family_count_group",
+            "floor_count_group",
+            "plan_configuration",
+            "legal_ownership_status",
+        ]
+        if additional_cols_to_drop:
+            self.final_drop_features.extend(additional_cols_to_drop)
+
+    def _get_dynamic_drop_features(self, df: pd.DataFrame) -> list[str]:
+        """Identifica le feature binarie originali da rimuovere dopo l'aggregazione."""
+        return [
+            col for col in df.columns
+            if col.startswith("has_superstructure_") or 
+               col == "has_secondary_use" or 
+               col.startswith("has_secondary_use_")
+        ]
 
     def fit(self, X, y=None):
-        # Il cleaner non ha bisogno di "imparare" nulla dai dati per ora,
-        # ma manteniamo la struttura per compatibilità.
         return self
 
     def transform(self, X):
-        """
-        Esegue la pulizia effettiva.
-        """
         X = X.copy()
         
-        # 1. Rimozione colonne non necessarie
-        existing_cols_to_drop = [col for col in self.cols_to_drop if col in X.columns]
+        # 1. Identificazione feature dinamiche (superstructure, secondary use)
+        dynamic_drops = self._get_dynamic_drop_features(X)
+        
+        # 2. Unione con le feature fisse
+        all_to_drop = list(set(self.final_drop_features + dynamic_drops))
+        
+        # 3. Rimozione effettiva
+        existing_cols_to_drop = [col for col in all_to_drop if col in X.columns]
         if existing_cols_to_drop:
             X = X.drop(columns=existing_cols_to_drop)
             
-        # 2. Gestione valori nulli (Fallback di sicurezza)
-        # Sebbene il dataset Richter sia noto per non avere nulli, 
-        # è buona norma avere un'azione di difesa se si usa il codice su nuovi dati.
+        # 4. Gestione valori nulli (Fallback di sicurezza)
         if X.isnull().values.any():
-            # Riempiamo i nulli numerici con la mediana e quelli categorici con 'missing'
             for col in X.columns:
                 if X[col].dtype in ['int64', 'float64']:
                     X[col] = X[col].fillna(X[col].median())

@@ -5,7 +5,7 @@ from sklearn.preprocessing import FunctionTransformer
 from .cleaner import DataCleaner
 from .age_handler import AgeHandler
 from .outliers import OutlierCapper
-from .encoding import CategoricalEncoder
+from .encoding import CategoricalEncoder, FrequencyEncoder
 from .scaling import NumericalScaler
 
 # Importiamo la funzione per il feature engineering esistente
@@ -13,16 +13,23 @@ from ..features import add_engineered_features
 
 def get_preprocessing_steps(scale_numeric=True):
     """
-    Restituisce la lista dei passi di preprocessing.
-    Invece di restituire una Pipeline nidificata, restituiamo i passi 
-    per permettere di creare una pipeline "piatta", più robusta.
+    Restituisce la lista dei passi di preprocessing aggiornata alla nuova strategia.
+    
+    L'ordine è critico:
+    1. Feature Engineering: crea nuove feature da quelle esistenti.
+    2. DataCleaner: rimuove le originali ormai ridondanti (e identificativi).
+    3. AgeHandler & OutlierCapper: gestisce i valori numerici.
+    4. FrequencyEncoder: encoding specifico per geo_level_2 e 3.
+    5. CategoricalEncoder: One-Hot per il resto.
+    6. NumericalScaler (opzionale): scaling finale.
     """
     steps = [
+        ('feature_engineering', FunctionTransformer(add_engineered_features)),
         ('cleaner', DataCleaner()),
         ('age_handler', AgeHandler()),
         ('outlier_capper', OutlierCapper()),
-        ('feature_engineering', FunctionTransformer(add_engineered_features)),
-        ('encoder', CategoricalEncoder()),
+        ('geo_freq_encoder', FrequencyEncoder()),
+        ('cat_encoder', CategoricalEncoder()),
     ]
     
     if scale_numeric:
@@ -39,7 +46,7 @@ def get_preprocessing_pipeline(scale_numeric=True):
 def make_complete_pipeline(model, scale_numeric=True):
     """
     Crea una pipeline "piatta" (non nidificata) che include sia 
-    preprocessing che modello. Questo evita errori di 'NotFittedError'.
+    preprocessing che modello.
     """
     steps = get_preprocessing_steps(scale_numeric)
     steps.append(('model', model))

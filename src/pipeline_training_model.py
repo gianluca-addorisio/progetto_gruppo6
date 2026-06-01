@@ -6,7 +6,7 @@ from sklearn.base import clone
 from sklearn.utils.class_weight import compute_sample_weight # Per gestire lo sbilanciamento delle classi
 
 from .data_loader import DataLoader
-from .preprocessing import make_complete_pipeline
+from .preprocessing.pipeline import make_complete_pipeline
 from .evaluation import evaluate_predictions
 from .models import get_random_forest_model, get_xgboost_model, get_lightgbm_model
 from .config import RANDOM_STATE
