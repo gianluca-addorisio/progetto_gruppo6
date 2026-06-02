@@ -6,12 +6,14 @@ from sklearn.base import clone
 from sklearn.utils.class_weight import compute_sample_weight # Per gestire lo sbilanciamento delle classi
 
 from .data_loader import DataLoader
-from .preprocessing.pipeline import make_complete_pipeline
+from .preprocessing.pipeline import make_complete_pipeline_from_features
 from .evaluation import evaluate_predictions
 from .models import get_random_forest_model, get_xgboost_model, get_lightgbm_model
 from .config import RANDOM_STATE
+from .featureselector import FeatureSelector
+from .preprocessing import pipeline
 
-def run_training_pipeline(feature_selection: bool = False, split_strategy: int = 2):
+def run_training_pipeline(feature_selection: bool = True, split_strategy: int = 2):
     """
     Main pipeline for loading data, training models and comparing results.
     """
@@ -21,10 +23,40 @@ def run_training_pipeline(feature_selection: bool = False, split_strategy: int =
     
     # Map labels to [0, 1, 2] for XGBoost/LightGBM compatibility
     y = y - 1
-    
+
+
     if feature_selection:
         print("--- 2. Feature Selection (Placeholder) ---")
+        preprocessor = pipeline.get_preprocessing_pipeline(scale_numeric=True)
+        X = preprocessor.fit_transform(X)
+        f_selector_rf = FeatureSelector('rf', 0.005, 20)
+        f_selector_rf.fit(X, y)
+        print("---. Feature rf: \n", f_selector_rf.get_feature_names_out())
+        f_selector_xgb = FeatureSelector('xgb', 0.005, 20)
+        f_selector_xgb.fit(X, y)
+        print("---. Feature xgb: \n", f_selector_xgb.get_feature_names_out())
+        f_selector_ctb = FeatureSelector('ctb', 0.005, 20)
+        f_selector_ctb.fit(X, y)
+        print("--- 3. Feature ctb: \n", f_selector_ctb.get_feature_names_out())
+
+        f_selector_corr = FeatureSelector('corr_matrix', 0.005, 20)
+        f_selector_corr.fit(X, y)
+        print("--- 3. Feature Correlation: \n", f_selector_corr.get_feature_names_out())
+
+        f_selector_chi2 = FeatureSelector('chi2', 0.005, 20)
+        f_selector_chi2.fit(X, y)
+        print("--- 3. Feature Chi-Square: \n", f_selector_chi2.get_feature_names_out())
+
+        f_selector_mu = FeatureSelector('mu', 0.005, 20)
+        f_selector_mu.fit(X, y)
+        print("--- 3. Feature Mutual Info: \n", f_selector_mu.get_feature_names_out())
+
+        # ReliefF può essere molto lento su dataset grandi, lo mettiamo per ultimo
+        #f_selector_rlf = FeatureSelector('rlf', 0.005, 20)
+        #f_selector_rlf.fit(X, y)
+        #sprint("--- 3. Feature ReliefF: \n", f_selector_rlf.get_feature_names_out())
         pass
+
 
     print(f"--- 3. Splitting and Training (Strategy {split_strategy}) ---")
     
@@ -50,7 +82,7 @@ def run_training_pipeline(feature_selection: bool = False, split_strategy: int =
             print(f"Training {name} con Pesi Bilanciati (per Macro-F1)...")
             
             # Creiamo una pipeline "piatta" (Preprocessing + Modello)
-            full_pipeline = make_complete_pipeline(model)
+            full_pipeline = make_complete_pipeline_from_features(model, X_train)
             
             # Passiamo i pesi calcolati allo step 'model' della pipeline
             full_pipeline.fit(X_train, y_train, model__sample_weight=weights_train)
@@ -77,7 +109,7 @@ def run_training_pipeline(feature_selection: bool = False, split_strategy: int =
                 
                 # Creiamo una pipeline fresca e piatta per ogni fold
                 model_fold = clone(model)
-                full_pipeline = make_complete_pipeline(model_fold)
+                full_pipeline = make_complete_pipeline_from_features(model_fold, X_train_f)
                 
                 # Applichiamo i pesi nel fit
                 full_pipeline.fit(X_train_f, y_train_f, model__sample_weight=weights_fold)

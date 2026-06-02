@@ -1,3 +1,4 @@
+import pandas as pd
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer
 
@@ -52,3 +53,12 @@ def make_complete_pipeline(model, scale_numeric=True):
     steps.append(('model', model))
     
     return Pipeline(steps)
+
+def make_complete_pipeline_from_features(model, X, scale_numeric=True):
+    """
+    Crea una pipeline che include non include il preprocessing
+    """
+
+    return Pipeline([('model', model)])
+
+

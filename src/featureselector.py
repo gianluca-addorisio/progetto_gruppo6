@@ -8,7 +8,7 @@ class FeatureSelector(BaseEstimator, TransformerMixin):
     Compatibile con le Pipeline di Scikit-Learn.
     """
 
-    def __init__(self, fs_method='rf', threshold=0.005, max_features_to_hold=30):
+    def __init__(self, fs_method: str, threshold=0.005, max_features_to_hold=30):
         """
         Parametri:
         - fs_method: metodo di selezione ('rf', 'xgb', 'ctb', 'corr_matrix', 'chi2', 'mu', 'rlf')

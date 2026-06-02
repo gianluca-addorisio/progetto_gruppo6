@@ -44,3 +44,5 @@ data/processed/*
 .idea
 
 catboost_info/
+
+plots/
