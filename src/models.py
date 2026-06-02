@@ -9,7 +9,7 @@ def get_random_forest_model():
         n_estimators=100,
         max_depth=15,
         random_state=RANDOM_STATE,
-        n_jobs=-1
+        n_jobs=-1,
     )
 
 def get_xgboost_model():

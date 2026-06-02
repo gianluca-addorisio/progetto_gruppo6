@@ -2,7 +2,7 @@
 
 Questo documento raccoglie le principali decisioni metodologiche prese durante lo sviluppo del progetto **FIA Earthquake Damage Predictor**.
 
-L'obiettivo non è sostituire i notebook, ma mantenere una traccia sintetica delle scelte operative che guidano preprocessing, feature engineering, feature selection e modellazione.
+L'obiettivo non è sostituire i notebook, ma mantenere una traccia sintetica, ordinata e aggiornata delle scelte operative che guidano preprocessing, feature engineering, feature selection e modellazione.
 
 ---
 
@@ -22,11 +22,21 @@ La metrica principale di valutazione è:
 
 - **micro-F1 score**
 
-Questa metrica dovrà essere usata per confrontare baseline, modelli successivi, feature engineering, feature selection ed eventuali esperimenti di riduzione della dimensionalità.
+La micro-F1 viene usata per confrontare baseline, modelli successivi, feature engineering, feature selection ed eventuali esperimenti di riduzione della dimensionalità.
+
+Come metriche quantitative di supporto vengono considerate anche:
+
+- macro-F1;
+- weighted-F1.
+
+Per l'analisi qualitativa degli errori e delle prestazioni per classe potranno essere usati anche:
+
+- classification report;
+- confusion matrix.
 
 ---
 
-## 2. Gestione di `building_id`
+## 2. Gestione di `building_id` e `damage_grade`
 
 `building_id` è un identificativo tecnico dell'edificio.
 
@@ -38,12 +48,214 @@ Decisione:
 
 Motivazione:
 
-- non rappresenta una proprietà fisica, geografica o strutturale dell'edificio;
+- non rappresenta una proprietà fisica, geografica, strutturale o d'uso dell'edificio;
 - usarlo come variabile predittiva rischierebbe di introdurre rumore o pattern non generalizzabili.
+
+`damage_grade` è la variabile target.
+
+Decisione:
+
+- deve essere rimossa da `X` se accidentalmente presente;
+- deve essere usata solo come variabile da predire.
+
+Motivazione:
+
+- mantenerla nella matrice delle feature causerebbe target leakage;
+- la separazione corretta del problema supervisionato è `X = feature dell'edificio` e `y = damage_grade`.
 
 ---
 
-## 3. Feature geografiche
+## 3. Feature set finale compatto
+
+Dopo l'analisi di feature selection e i test diagnostici sulle principali famiglie di variabili, è stata adottata una versione compatta e interpretabile della feature matrix finale.
+
+L'obiettivo non è massimizzare ogni minimo incremento locale di performance, ma costruire una pipeline stabile, leggibile e difendibile, mantenendo le informazioni strutturali e geografiche principali.
+
+### Feature finali prima dell'encoding
+
+La feature matrix preparata contiene 17 colonne prima dell'encoding:
+
+- `geo_level_1_id`
+- `geo_level_2_id`
+- `geo_level_3_id`
+- `count_floors_pre_eq`
+- `age`
+- `land_surface_condition`
+- `foundation_type`
+- `roof_type`
+- `ground_floor_type`
+- `other_floor_type`
+- `position`
+- `count_families`
+- `total_superstructure_count`
+- `total_secondary_use_count`
+- `has_fragile_material`
+- `has_engineered_structure`
+- `building_volume_proxy`
+
+---
+
+## 4. Feature dimensionali
+
+La feature `building_volume_proxy` è definita come:
+
+```text
+building_volume_proxy = area_percentage * height_percentage
+```
+
+Decisione:
+
+- mantenere `building_volume_proxy`;
+- rimuovere `area_percentage`;
+- rimuovere `height_percentage`.
+
+Motivazione:
+
+- `area_percentage` e `height_percentage` descrivono due aspetti dimensionali dell'edificio;
+- `building_volume_proxy` sintetizza queste informazioni in una proxy dimensionale unica;
+- la scelta riduce ridondanza e complessità della feature matrix;
+- il trade-off prestazionale osservato nei test diagnostici è stato considerato accettabile rispetto al guadagno in compattezza e interpretabilità.
+
+Nota:
+
+- questa decisione non viene motivata come miglioramento assoluto della performance;
+- viene adottata come semplificazione controllata della rappresentazione dimensionale.
+
+---
+
+## 5. Gestione dell'età
+
+Durante l'analisi è stato osservato il valore estremo:
+
+- `age = 995`
+
+Decisione finale:
+
+- mantenere `age`;
+- rimuovere `age_clipped`;
+- rimuovere `age_group`.
+
+Motivazione:
+
+- `age` conserva direttamente l'informazione sull'età dell'edificio;
+- `age_clipped` e `age_group` derivano da `age` e non aggiungono informazione indipendente;
+- `age_group` introduce soglie arbitrarie;
+- `age_clipped` modifica la distribuzione originale solo nella coda estrema;
+- i test diagnostici non hanno mostrato un beneficio robusto delle feature derivate rispetto alla variabile originale.
+
+Nota:
+
+- il valore `age = 995` resta riconosciuto come valore estremo o codificato in modo particolare;
+- non vengono modificati i dati originali in `data/raw/`.
+
+---
+
+## 6. Feature di uso secondario
+
+Le feature originali di uso secondario sono:
+
+- `has_secondary_use`
+- tutte le feature `has_secondary_use_*`
+
+Decisione finale:
+
+- rimuovere le feature originali di uso secondario;
+- mantenere solo `total_secondary_use_count`.
+
+Motivazione:
+
+- molte sotto-categorie di uso secondario sono molto rare;
+- mantenerle tutte aumenterebbe sparsità e dimensionalità;
+- `total_secondary_use_count` conserva un segnale sintetico sull'esistenza e quantità di usi secondari;
+- la scelta rappresenta una compressione del segnale, non una sua eliminazione completa.
+
+---
+
+## 7. Feature di superstruttura
+
+Le feature originali `has_superstructure_*` descrivono materiali e tecniche costruttive dell'edificio.
+
+Decisione finale:
+
+- rimuovere le singole feature originali `has_superstructure_*`;
+- mantenere tre feature aggregate:
+
+  - `total_superstructure_count`
+  - `has_fragile_material`
+  - `has_engineered_structure`
+
+Motivazione:
+
+- le feature di superstruttura sono direttamente collegate alla vulnerabilità sismica;
+- le variabili originali sono numerose, binarie e in parte ridondanti;
+- gli aggregati conservano un significato fisico chiaro;
+- i test diagnostici hanno mostrato che gli aggregati mantengono gran parte del segnale utile con una rappresentazione più compatta.
+
+`has_fragile_material` aggrega la presenza di materiali potenzialmente fragili.
+
+`has_engineered_structure` aggrega la presenza di componenti strutturali più ingegnerizzate.
+
+---
+
+## 8. Feature categoriche strutturali mantenute
+
+Sono mantenute e trattate come categoriche a bassa cardinalità:
+
+- `foundation_type`
+- `roof_type`
+- `ground_floor_type`
+- `other_floor_type`
+- `position`
+- `land_surface_condition`
+
+Motivazione:
+
+- hanno cardinalità contenuta;
+- il costo dimensionale dopo one-hot encoding è limitato;
+- alcune rappresentano caratteristiche fisiche o strutturali direttamente collegate alla vulnerabilità sismica;
+- i test diagnostici non hanno giustificato la loro rimozione dalla pipeline finale.
+
+Sono invece rimosse:
+
+- `plan_configuration`
+- `legal_ownership_status`
+
+Motivazione:
+
+- distribuzione fortemente sbilanciata;
+- associazione effettiva debole con il target;
+- contributo limitato o non robusto nei test diagnostici;
+- riduzione della dimensionalità e della complessità della pipeline.
+
+---
+
+## 9. Feature numeriche mantenute
+
+Sono mantenute nella forma originale:
+
+- `count_floors_pre_eq`
+- `count_families`
+- `age`
+
+Motivazione:
+
+- `count_floors_pre_eq` rappresenta una caratteristica strutturale diretta dell'edificio;
+- `count_families` contiene un segnale debole ma misurabile e ha costo nullo in termini di encoding;
+- `age` conserva l'informazione originale sull'età dell'edificio.
+
+Non vengono introdotte nella pipeline finale:
+
+- `floor_count_group`
+- `family_count_group`
+
+Motivazione:
+
+- le versioni raggruppate rendono le feature più interpretabili, ma comportano perdita di informazione rispetto alle variabili grezze;
+- i test diagnostici non hanno mostrato un vantaggio sufficiente per sostituire le variabili originali.
+
+---
+
+## 10. Encoding delle feature geografiche
 
 Le feature geografiche sono:
 
@@ -51,213 +263,84 @@ Le feature geografiche sono:
 - `geo_level_2_id`
 - `geo_level_3_id`
 
-Decisione:
+Queste variabili sono codificate come numeri, ma rappresentano identificativi geografici. Non devono quindi essere interpretate come variabili numeriche continue, ordinali o metriche.
 
-- devono essere trattate come variabili categoriche identificative;
-- non devono essere trattate come variabili numeriche continue;
-- non devono essere scalate come grandezze quantitative ordinate.
+Sono state confrontate quattro strategie:
 
-Motivazione:
+1. geografiche lasciate come numeriche grezze;
+2. geografiche completamente rimosse;
+3. strategia ibrida con `geo_level_1_id` one-hot e `geo_level_2_id` / `geo_level_3_id` frequency encoding;
+4. strategia con `geo_level_1_id` one-hot, `geo_level_2_id` frequency encoding e rimozione di `geo_level_3_id`.
 
-- anche se sono codificate come numeri, rappresentano identificativi geografici;
-- il valore numerico non ha significato metrico o ordinale;
-- la posizione geografica può catturare differenze territoriali, costruttive, di esposizione o di intensità del danno.
+Decisione finale:
 
-Nota operativa:
-
-- `geo_level_1_id` ha cardinalità più gestibile;
-- `geo_level_2_id` e `geo_level_3_id` hanno cardinalità elevata;
-- one-hot encoding può essere usato come baseline iniziale, ma potrebbe produrre matrici molto larghe;
-- strategie come frequency encoding o target encoding dovranno essere valutate con attenzione;
-- target encoding, se usato, dovrà essere applicato solo dentro una procedura di validazione corretta per evitare data leakage.
-
----
-
-## 4. Gestione di `age = 995`
-
-Durante l'analisi è stato osservato il valore estremo:
-
-- `age = 995`
-
-Decisione:
-
-- non modificare i dati originali in `data/raw/`;
-- trattare `age = 995` come valore estremo, anomalo o codificato in modo particolare;
-- non usarlo direttamente come se rappresentasse una normale età dell'edificio;
-- introdurre feature trasformate dell'età.
-
-Feature candidate introdotte:
-
-- `age_clipped`
-- `age_group`
-
-Scelta attuale:
-
-- `age_clipped` limita l'età massima a 200;
-- `age_group` discretizza l'età in classi interpretabili.
+- `geo_level_1_id`: one-hot encoding;
+- `geo_level_2_id`: frequency encoding;
+- `geo_level_3_id`: frequency encoding.
 
 Motivazione:
 
-- `age = 995` può distorcere statistiche, scaling e modelli sensibili ai valori estremi;
-- clipping e discretizzazione mantengono informazione utile sull'età, riducendo l'effetto degli outlier.
+- le feature geografiche sono molto informative;
+- rimuoverle causa un calo evidente delle performance;
+- `geo_level_1_id` ha cardinalità gestibile e può essere trattata con one-hot encoding;
+- `geo_level_2_id` e `geo_level_3_id` hanno cardinalità elevata e vengono compressi tramite frequency encoding;
+- il one-hot completo delle geografiche granulari produrrebbe una matrice molto ampia e sparsa.
 
-Stato:
+Nota metodologica:
 
-- decisione operativa ragionevole per la pipeline iniziale;
-- impatto da validare quantitativamente tramite micro-F1.
-
----
-
-## 5. Feature engineering candidate
-
-Sono state proposte feature ingegnerizzate interpretabili, costruite a partire dalle variabili originali.
-
-Feature candidate:
-
-- `age_clipped`
-- `age_group`
-- `building_volume_proxy`
-- `has_engineered_structure`
-- `has_fragile_material`
-- `total_secondary_use_count`
-- `total_superstructure_count`
-
-Decisione:
-
-- mantenere queste feature nella prima versione del dataset arricchito;
-- valutarne l'impatto tramite feature selection e confronto di modelli;
-- non considerarle definitive fino alla validazione quantitativa.
+- il frequency encoding deve essere fittato solo sul training set;
+- in validazione o test, categorie mai viste nel training vengono mappate a frequenza `0.0`;
+- questa scelta evita leakage strutturale tra training e validation.
 
 ---
 
-## 6. `has_fragile_material`
+## 11. Preprocessing finale
 
-La feature `has_fragile_material` aggrega la presenza di materiali potenzialmente fragili.
-
-Materiali considerati:
-
-- `has_superstructure_adobe_mud`
-- `has_superstructure_mud_mortar_stone`
-- `has_superstructure_stone_flag`
-- `has_superstructure_mud_mortar_brick`
-
-Decisione:
-
-- mantenere `has_fragile_material` come feature candidata.
-
-Motivazione:
-
-- rappresenta un'informazione strutturale interpretabile;
-- è coerente con l'ipotesi che materiali più fragili siano associati a maggiore vulnerabilità sismica;
-- nel notebook di feature engineering mostra una relazione preliminare forte con `damage_grade`.
-
-Stato:
-
-- feature promettente dal punto di vista interpretativo;
-- impatto da validare con micro-F1.
-
----
-
-## 7. `has_engineered_structure`
-
-La feature `has_engineered_structure` aggrega la presenza di componenti strutturali più ingegnerizzate.
-
-Componenti considerati:
-
-- `has_superstructure_cement_mortar_stone`
-- `has_superstructure_cement_mortar_brick`
-- `has_superstructure_rc_non_engineered`
-- `has_superstructure_rc_engineered`
-
-Decisione:
-
-- mantenere `has_engineered_structure` come feature candidata.
-
-Motivazione:
-
-- rappresenta un indicatore sintetico di maggiore robustezza strutturale;
-- dovrebbe essere più frequente negli edifici meno danneggiati;
-- nel notebook di feature engineering mostra una relazione preliminare coerente con questa ipotesi.
-
-Stato:
-
-- feature promettente dal punto di vista interpretativo;
-- impatto da validare con micro-F1.
-
----
-
-## 8. `building_volume_proxy`
-
-La feature `building_volume_proxy` è definita come `area_percentage * height_percentage`.
-
-Decisione:
-
-- mantenere `building_volume_proxy` come feature candidata.
-
-Motivazione:
-
-- fornisce una proxy dimensionale dell'edificio;
-- può catturare informazioni non rappresentate separatamente da area e altezza;
-- la relazione con il danno potrebbe non essere lineare.
-
-Stato:
-
-- feature interpretabile;
-- utilità predittiva da validare tramite modelli.
-
----
-
-## 9. Conteggi aggregati
-
-Sono state introdotte due feature di conteggio:
-
-- `total_superstructure_count`
-- `total_secondary_use_count`
-
-Decisione:
-
-- mantenerle entrambe come feature candidate nella prima pipeline.
-
-Motivazione:
-
-- `total_superstructure_count` sintetizza il numero di materiali o tecniche costruttive presenti;
-- `total_secondary_use_count` sintetizza il numero di usi secondari specifici;
-- queste feature possono catturare complessità strutturale o funzionale dell'edificio.
-
-Stato:
-
-- utilità da validare quantitativamente;
-- possibile contributo diverso tra modelli lineari e modelli tree-based.
-
----
-
-## 10. Preprocessing iniziale
-
-Decisioni operative per il preprocessing iniziale:
-
-- rimuovere `building_id`;
-- rimuovere `damage_grade` dalle feature se accidentalmente presente;
-- aggiungere feature ingegnerizzate tramite `src/features.py`;
-- trattare feature categoriche testuali e feature geografiche come categoriche;
-- trattare `age_group` come categorica;
-- applicare one-hot encoding come baseline iniziale;
-- applicare scaling solo dove necessario, ad esempio per modelli lineari o metodi sensibili alla scala;
-- usare split stratificato per mantenere la distribuzione delle classi.
-
-Implementazione attuale:
+La pipeline finale di preprocessing è implementata in:
 
 - `src/features.py`
 - `src/preprocessing.py`
-- `src/data_loader.py`
 
-Stato:
+Operazioni principali:
 
-- implementazione validata tramite smoke test;
-- pipeline ancora da estendere per model comparison, feature selection e tuning.
+1. rimozione di identificativi e target se presenti;
+2. creazione delle feature aggregate e del proxy dimensionale;
+3. rimozione delle feature escluse o compresse;
+4. one-hot encoding delle categoriche a bassa cardinalità;
+5. one-hot encoding di `geo_level_1_id`;
+6. frequency encoding di `geo_level_2_id` e `geo_level_3_id`;
+7. passthrough o scaling delle feature numeriche a seconda del modello.
+
+Il preprocessing produce una matrice compatta, coerente con le decisioni di feature selection e adatta alla model comparison successiva.
 
 ---
 
-## 11. PCA / dimensionality reduction
+## 12. Smoke test della pipeline finale
+
+Dopo l'implementazione della pipeline finale è stato eseguito uno smoke test con:
+
+- split train/validation stratificato;
+- `DecisionTreeClassifier(max_depth=12)`;
+- metriche micro-F1, macro-F1 e weighted-F1.
+
+Risultati osservati:
+
+- feature prima del preprocessing: 17;
+- feature dopo encoding/preprocessing: 65;
+- micro-F1: circa `0.70265`;
+- macro-F1: circa `0.62362`;
+- weighted-F1: circa `0.68989`.
+
+Il test conferma che:
+
+- la pipeline funziona correttamente;
+- la strategia geografica ibrida è operativa;
+- la feature matrix finale mantiene una dimensionalità contenuta;
+- le performance restano coerenti con i test diagnostici precedenti.
+
+---
+
+## 13. PCA / dimensionality reduction
 
 Decisione:
 
@@ -282,71 +365,66 @@ Esperimento previsto:
 Stato:
 
 - non ancora implementata;
-- da trattare dopo una baseline e una pipeline di preprocessing stabile.
+- da trattare dopo una pipeline di preprocessing stabile e una prima model comparison.
 
 ---
 
-## 12. Feature selection
+## 14. Feature selection e model comparison
 
-La feature selection dovrà verificare quantitativamente quali feature contribuiscono davvero alla performance.
+La feature selection è stata usata per arrivare a un feature set compatto e interpretabile.
 
-Tecniche candidate:
+Le prossime fasi dovranno verificare quantitativamente la robustezza delle scelte effettuate attraverso:
 
-- confronto tra dataset originale e dataset arricchito;
+- confronto tra modelli diversi;
 - feature importance da modelli tree-based;
-- permutation importance;
-- SelectKBest o metodi analoghi;
-- confronto micro-F1 con tutte le feature e con subset selezionato.
+- eventuale permutation importance;
+- confronto micro-F1 con e senza eventuali gruppi di feature;
+- valutazione della stabilità delle performance.
+
+Modelli candidati per la model comparison:
+
+- Logistic Regression;
+- Decision Tree;
+- Random Forest;
+- ExtraTrees;
+- Gradient Boosting;
+- eventuale XGBoost o LightGBM se compatibile con l'ambiente.
+
+---
+
+## 15. Integrazione con il lavoro di preprocessing parallelo
+
+Nel branch `data_preprocessing` è stata introdotta una cartella separata:
+
+- `preprocessing/`
+
+Questa cartella contiene una pipeline parallela/sperimentale di preprocessing.
 
 Decisione:
 
-- le feature candidate non sono definitive;
-- devono essere validate con modelli e micro-F1;
-- l'interpretabilità resta importante, ma non sostituisce la valutazione quantitativa.
+- non integrare direttamente questa cartella nella pipeline finale in questa fase;
+- mantenere come pipeline stabile per la modellazione il codice contenuto in `src/`;
+- valutare successivamente se recuperare singole idee o funzioni dal branch parallelo, evitando duplicazioni e conflitti.
+
+Motivazione:
+
+- la pipeline finale del progetto è già centralizzata in `src/`;
+- la cartella `preprocessing/` usa una struttura parallela e non ancora allineata alle decisioni finali di feature selection;
+- l'integrazione diretta rischierebbe di introdurre duplicazione o incoerenza.
 
 ---
 
-## 13. Decisioni non ancora definitive
-
-Restano da decidere o validare:
-
-- encoding finale per `geo_level_2_id` e `geo_level_3_id`;
-- impatto quantitativo di `age_clipped` e `age_group`;
-- reale contributo di `has_fragile_material`;
-- reale contributo di `has_engineered_structure`;
-- utilità di `building_volume_proxy`;
-- utilità dei conteggi aggregati;
-- modello migliore per la pipeline finale;
-- eventuale uso di PCA;
-- strategia di feature selection;
-- strategia di tuning;
-- procedura finale di generazione submission.
-
----
-
-## 14. Stato attuale
-
-Alla data di questo documento:
-
-- notebook 03 ha prodotto le ipotesi di feature comprehension;
-- notebook 04 ha implementato e analizzato feature ingegnerizzate interpretabili;
-- `src/` contiene una base funzionante per data loading, feature engineering, preprocessing, evaluation e utility;
-- notebook 05 è stato revisionato come baseline preliminare, ma richiede una piccola correzione per compatibilità con la versione attuale di scikit-learn;
-- le prossime fasi saranno feature selection, model comparison, eventuale PCA e tuning.
-
----
-
-## 15. Manutenzione repository e pulizia branch
+## 16. Manutenzione repository e pulizia branch
 
 Dopo l'integrazione dei contributi principali nel branch `dev`, il gruppo ha deciso di avviare una pulizia dei branch remoti ormai già mergiati, superati o non più operativi.
 
-Questa decisione non riguarda la metodologia di modellazione, ma l'organizzazione operativa del repository. L'obiettivo è mantenere GitHub più leggibile, ridurre ambiguità sui branch attivi e rendere più chiaro quale ramo rappresenti lo stato aggiornato del progetto.
+Questa decisione non riguarda la metodologia di modellazione, ma l'organizzazione operativa del repository. L'obiettivo è mantenere la repository su GitHub più leggibile, ridurre ambiguità interne al gruppo sui branch attivi e rendere più chiaro quale ramo rappresenti lo stato aggiornato del progetto.
 
 Branch remoti rimossi perché già integrati in `dev`:
 
 - `cleanup/final-integration`: branch di integrazione intermedia usato per raccogliere la struttura comune del progetto, i notebook già revisionati, la documentazione iniziale e le utility condivise.
 - `feature/03-feature-comprehension`: branch relativo al contributo sul notebook 03, dedicato alla comprensione semantica delle feature e alle note operative preliminari.
-- `feature/feature-engineering-selection`: branch relativo al contributo sul notebook 04, alla feature engineering e alla prima versione del decision log metodologico.
+- `feature/feature-engineering-selection`: branch relativo al notebook 04, alla feature engineering e alla prima versione del decision log metodologico.
 - `feature/feature-selection`: branch relativo al notebook 06 e alla prima analisi di feature selection, poi integrato nel flusso principale di sviluppo.
 
 Branch remoti rimossi perché superati dalle versioni presenti in `dev` o non più operativi:
@@ -366,3 +444,21 @@ Decisione operativa:
 - recuperare manualmente eventuali contenuti utili prima della cancellazione;
 - non usare merge diretti da branch storici quando rischiano di reintrodurre versioni obsolete dei file.
 
+---
+
+## 17. Stato attuale e prossimi step
+
+Alla data di questo aggiornamento:
+
+- `src/features.py` contiene solo le feature ingegnerizzate mantenute nel feature set finale;
+- `src/preprocessing.py` implementa la pipeline finale compatta, incluso l'encoding geografico ibrido;
+- il feature set finale è stato validato con smoke test;
+- la cartella `preprocessing/` resta separata e non viene usata come pipeline finale;
+- il repository è stato pulito dai branch remoti superati.
+
+Prossimi step:
+
+- eseguire model comparison sulla pipeline aggiornata;
+- valutare eventuale PCA come esperimento secondario;
+- procedere con tuning e final evaluation;
+- coordinare l'integrazione del lavoro sviluppato sul branch `gianluca` con il lavoro di Claudia presente nel branch `data_preprocessing`, utilizzando il branch dedicato `merge_preprocessing` creato da Nicola per gestire il merge tra le due linee di sviluppo.
