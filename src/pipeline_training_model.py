@@ -3,42 +3,63 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from sklearn.base import clone
+from sklearn.utils.class_weight import compute_sample_weight # Per gestire lo sbilanciamento delle classi
 
 from .data_loader import DataLoader
-from .preprocessing import prepare_features, make_model_pipeline
+from .preprocessing.pipeline import make_complete_pipeline_from_features
 from .evaluation import evaluate_predictions
 from .models import get_random_forest_model, get_xgboost_model, get_lightgbm_model
 from .config import RANDOM_STATE
+from .featureselector import FeatureSelector
+from .preprocessing import pipeline
 
-def run_training_pipeline(feature_selection: bool = False, split_strategy: int = 4):
+def run_training_pipeline(feature_selection: bool = True, split_strategy: int = 2):
     """
     Main pipeline for loading data, training models and comparing results.
-    
-    Args:
-        feature_selection: Whether to apply feature selection (placeholder).
-        split_strategy: Choice from DataLoader.split_dataset_by_strategy:
-            1: Holdout, 2: Stratified Holdout, 3: K-Fold, 4: Stratified K-Fold...
     """
     print("--- 1. Loading Data ---")
     data_loader = DataLoader()
     X, y = data_loader.load_train_test()
     
-    print("--- 2. Preparing Features ---")
-    X_prepared = prepare_features(X)
-    
-    # Map labels to [0, 1, 2] for XGBoost/LightGBM compatibility (they expect 0-indexed classes)
+    # Map labels to [0, 1, 2] for XGBoost/LightGBM compatibility
     y = y - 1
-    
+
+
     if feature_selection:
-        print("--- 2b. Feature Selection (Placeholder) ---")
-        # Qui potrai applicare la tua logica di feature selection
-        # Es: fs = FeatureSelection()
-        # X_prepared = fs.select(X_prepared, y)
+        print("--- 2. Feature Selection (Placeholder) ---")
+        preprocessor = pipeline.get_preprocessing_pipeline(scale_numeric=True)
+        X = preprocessor.fit_transform(X)
+        f_selector_rf = FeatureSelector('rf', 0.005, 20)
+        f_selector_rf.fit(X, y)
+        print("---. Feature rf: \n", f_selector_rf.get_feature_names_out())
+        f_selector_xgb = FeatureSelector('xgb', 0.005, 20)
+        f_selector_xgb.fit(X, y)
+        print("---. Feature xgb: \n", f_selector_xgb.get_feature_names_out())
+        f_selector_ctb = FeatureSelector('ctb', 0.005, 20)
+        f_selector_ctb.fit(X, y)
+        print("--- 3. Feature ctb: \n", f_selector_ctb.get_feature_names_out())
+
+        f_selector_corr = FeatureSelector('corr_matrix', 0.005, 20)
+        f_selector_corr.fit(X, y)
+        print("--- 3. Feature Correlation: \n", f_selector_corr.get_feature_names_out())
+
+        f_selector_chi2 = FeatureSelector('chi2', 0.005, 20)
+        f_selector_chi2.fit(X, y)
+        print("--- 3. Feature Chi-Square: \n", f_selector_chi2.get_feature_names_out())
+
+        f_selector_mu = FeatureSelector('mu', 0.005, 20)
+        f_selector_mu.fit(X, y)
+        print("--- 3. Feature Mutual Info: \n", f_selector_mu.get_feature_names_out())
+
+        # ReliefF può essere molto lento su dataset grandi, lo mettiamo per ultimo
+        #f_selector_rlf = FeatureSelector('rlf', 0.005, 20)
+        #f_selector_rlf.fit(X, y)
+        #sprint("--- 3. Feature ReliefF: \n", f_selector_rlf.get_feature_names_out())
         pass
 
-    print(f"--- 3. Splitting Data (Strategy {split_strategy}) ---")
+
+    print(f"--- 3. Splitting and Training (Strategy {split_strategy}) ---")
     
-    # Define models to compare using factory functions from models.py
     models_to_compare = {
         "RandomForest": get_random_forest_model(),
         "XGBoost": get_xgboost_model(),
@@ -49,46 +70,55 @@ def run_training_pipeline(feature_selection: bool = False, split_strategy: int =
 
     if split_strategy in [1, 2]:
         # --- HOLD-OUT STRATEGY ---
-        X_train, X_val, y_train, y_val = data_loader.split_dataset_by_strategy(split_strategy, X_prepared, y)
+        X_train, X_val, y_train, y_val = data_loader.split_dataset_by_strategy(split_strategy, X, y)
         print(f"Train size: {X_train.shape}, Validation size: {X_val.shape}")
         
-        print("\n--- 4. Training and Evaluation (Holdout) ---")
+        # BILANCIAMENTO: Calcoliamo i pesi per ogni riga del training set.
+        # Le classi meno frequenti (come la Classe 1) riceveranno un peso maggiore.
+        # Questo costringe il modello a dare più importanza agli errori sulle classi rare.
+        weights_train = compute_sample_weight(class_weight='balanced', y=y_train)
+        
         for name, model in models_to_compare.items():
-            print(f"Training {name}...")
-            pipeline = make_model_pipeline(model, X_train)
-            pipeline.fit(X_train, y_train)
-            y_pred = pipeline.predict(X_val)
+            print(f"Training {name} con Pesi Bilanciati (per Macro-F1)...")
+            
+            # Creiamo una pipeline "piatta" (Preprocessing + Modello)
+            full_pipeline = make_complete_pipeline_from_features(model, X_train)
+            
+            # Passiamo i pesi calcolati allo step 'model' della pipeline
+            full_pipeline.fit(X_train, y_train, model__sample_weight=weights_train)
+            y_pred = full_pipeline.predict(X_val)
             
             metrics = evaluate_predictions(y_val, y_pred, name)
             results.append(metrics)
-            print(f"Done. Micro-F1: {metrics['micro_f1']:.4f}")
+            print(f"Done. Micro-F1: {metrics['micro_f1']:.4f} | Macro-F1: {metrics['macro_f1']:.4f}")
 
     else:
         # --- CROSS-VALIDATION STRATEGY ---
-        print(f"\n--- 4. Training and Evaluation (CV Strategy {split_strategy}) ---")
-        # DataLoader returns list of (train_idx, val_idx)
-        splits = data_loader.split_dataset_by_strategy(split_strategy, X_prepared, y)
+        splits = data_loader.split_dataset_by_strategy(split_strategy, X, y)
 
         for name, model in models_to_compare.items():
-            print(f"Evaluating {name} via CV...")
+            print(f"Evaluating {name} via CV con Pesi Bilanciati...")
             fold_results = []
             
             for fold, (train_idx, val_idx) in enumerate(splits):
-                X_train_f, X_val_f = X_prepared.iloc[train_idx], X_prepared.iloc[val_idx]
+                X_train_f, X_val_f = X.iloc[train_idx], X.iloc[val_idx]
                 y_train_f, y_val_f = y.iloc[train_idx], y.iloc[val_idx]
                 
-                # Clone model to ensure a fresh start for each fold
-                model_fold = clone(model)
-                pipeline = make_model_pipeline(model_fold, X_train_f)
+                # Calcoliamo i pesi bilanciati specifici per questo fold
+                weights_fold = compute_sample_weight(class_weight='balanced', y=y_train_f)
                 
-                pipeline.fit(X_train_f, y_train_f)
-                y_pred = pipeline.predict(X_val_f)
+                # Creiamo una pipeline fresca e piatta per ogni fold
+                model_fold = clone(model)
+                full_pipeline = make_complete_pipeline_from_features(model_fold, X_train_f)
+                
+                # Applichiamo i pesi nel fit
+                full_pipeline.fit(X_train_f, y_train_f, model__sample_weight=weights_fold)
+                y_pred = full_pipeline.predict(X_val_f)
                 
                 fold_metrics = evaluate_predictions(y_val_f, y_pred, name)
                 fold_results.append(fold_metrics)
-                print(f"  Fold {fold+1}: Micro-F1 = {fold_metrics['micro_f1']:.4f}")
+                print(f"  Fold {fold+1}: Micro-F1 = {fold_metrics['micro_f1']:.4f} | Macro-F1 = {fold_metrics['macro_f1']:.4f}")
 
-            # Aggregate fold results
             avg_metrics = {
                 "model": name,
                 "micro_f1": np.mean([r["micro_f1"] for r in fold_results]),
@@ -96,12 +126,10 @@ def run_training_pipeline(feature_selection: bool = False, split_strategy: int =
                 "weighted_f1": np.mean([r["weighted_f1"] for r in fold_results]),
             }
             results.append(avg_metrics)
-            print(f"Average Micro-F1 for {name}: {avg_metrics['micro_f1']:.4f}\n")
+            print(f"Average Micro-F1: {avg_metrics['micro_f1']:.4f} | Average Macro-F1: {avg_metrics['macro_f1']:.4f}\n")
 
-    # Create comparison table
     comparison_df = pd.DataFrame(results)
-    
-    print("\n--- 5. Results Comparison ---")
+    print("\n--- 4. Results Comparison ---")
     print(comparison_df.to_string(index=False))
     
     return comparison_df

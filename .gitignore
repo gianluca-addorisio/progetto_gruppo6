@@ -42,3 +42,7 @@ data/processed/*
 .vscode/
 
 .idea
+
+catboost_info/
+
+plots/

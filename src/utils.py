@@ -36,6 +36,8 @@ def load_model(path: str | Path):
     """Load a model saved with joblib."""
     return joblib.load(path)
 
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import pandas as pd
 
