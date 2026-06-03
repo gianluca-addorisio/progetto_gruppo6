@@ -8,7 +8,7 @@ from sklearn.utils.class_weight import compute_sample_weight # Per gestire lo sb
 from .data_loader import DataLoader
 from .preprocessing.pipeline import make_complete_pipeline_from_features
 from .evaluation import evaluate_predictions
-from .models import get_random_forest_model, get_xgboost_model, get_lightgbm_model
+from .models import get_random_forest_model, get_xgboost_model, get_lightgbm_model, get_dummy_classifier, get_logistic_regression, get_decision_tree
 from .config import RANDOM_STATE
 from .featureselector import FeatureSelector
 from .preprocessing import pipeline

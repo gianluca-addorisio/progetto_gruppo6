@@ -1,4 +1,5 @@
-from sklearn.ensemble import RandomForestClassifier, DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.dummy import DummyClassifier
 from xgboost import XGBClassifier
