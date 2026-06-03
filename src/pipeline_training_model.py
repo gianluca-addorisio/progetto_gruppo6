@@ -5,6 +5,7 @@ import pandas as pd
 from sklearn.base import clone
 from sklearn.utils.class_weight import compute_sample_weight # Per gestire lo sbilanciamento delle classi
 
+from src.hyperparameter_tuning import tune_random_forest
 from .data_loader import DataLoader
 from .preprocessing.pipeline import make_complete_pipeline_from_features
 from .evaluation import evaluate_predictions
@@ -12,6 +13,10 @@ from .models import get_random_forest_model, get_xgboost_model, get_lightgbm_mod
 from .config import RANDOM_STATE
 from .featureselector import FeatureSelector
 from .preprocessing import pipeline
+
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.pipeline import Pipeline
+from .hyperparameter_tuning_feature_selection import hyperparameter_tune_fs
 
 def run_training_pipeline(feature_selection: bool = True, split_strategy: int = 2):
     """
@@ -26,42 +31,69 @@ def run_training_pipeline(feature_selection: bool = True, split_strategy: int = 
 
 
     if feature_selection:
-        print("--- 2. Feature Selection (Placeholder) ---")
+        print("--- 2. Feature Selection & Tuning ---")
         preprocessor = pipeline.get_preprocessing_pipeline(scale_numeric=True)
-        X = preprocessor.fit_transform(X)
-        f_selector_rf = FeatureSelector('rf', 0.005, 20)
-        f_selector_rf.fit(X, y)
-        print("---. Feature rf: \n", f_selector_rf.get_feature_names_out())
+        X_encoded = preprocessor.fit_transform(X)
+        
+        print("Esecuzione tuning automatico veloce (sampling 20k righe, 5 iterazioni)...")
+        tune_pipe = Pipeline([
+            ('selector', FeatureSelector(fs_method='rf')),
+            ('model', RandomForestClassifier(n_estimators=50, random_state=RANDOM_STATE, n_jobs=-1))
+        ])
+        
+        # Sampling per velocizzare il tuning
+        sample_size = min(20000, len(X_encoded))
+        X_tune = X_encoded.sample(n=sample_size, random_state=RANDOM_STATE)
+        y_tune = y.iloc[X_tune.index]
+        
+        best_fs_params = hyperparameter_tune_fs(tune_pipe, X_tune, y_tune, num_iter=5)
+        print(f"Parametri ottimali trovati: {best_fs_params}")
+        
+        # Rimuoviamo il prefisso 'selector__' dai parametri per poterli usare nel singolo oggetto
+        clean_fs_params = {k.replace('selector__', ''): v for k, v in best_fs_params.items() if k.startswith('selector__')}
+        
+        f_selector_rf = FeatureSelector('rf')
+        f_selector_rf.set_params(**clean_fs_params)
+        f_selector_rf.fit(X_encoded, y)
+        print("---. Feature rf (TUNED): \n", f_selector_rf.get_feature_names_out())
+
         f_selector_xgb = FeatureSelector('xgb', 0.005, 20)
-        f_selector_xgb.fit(X, y)
+        f_selector_xgb.fit(X_encoded, y)
         print("---. Feature xgb: \n", f_selector_xgb.get_feature_names_out())
+        
         f_selector_ctb = FeatureSelector('ctb', 0.005, 20)
-        f_selector_ctb.fit(X, y)
-        print("--- 3. Feature ctb: \n", f_selector_ctb.get_feature_names_out())
+        f_selector_ctb.fit(X_encoded, y)
+        print("---. Feature ctb: \n", f_selector_ctb.get_feature_names_out())
 
         f_selector_corr = FeatureSelector('corr_matrix', 0.005, 20)
-        f_selector_corr.fit(X, y)
-        print("--- 3. Feature Correlation: \n", f_selector_corr.get_feature_names_out())
+        f_selector_corr.fit(X_encoded, y)
+        print("---. Feature Correlation: \n", f_selector_corr.get_feature_names_out())
 
         f_selector_chi2 = FeatureSelector('chi2', 0.005, 20)
-        f_selector_chi2.fit(X, y)
-        print("--- 3. Feature Chi-Square: \n", f_selector_chi2.get_feature_names_out())
+        f_selector_chi2.fit(X_encoded, y)
+        print("---. Feature Chi-Square: \n", f_selector_chi2.get_feature_names_out())
 
-        f_selector_mu = FeatureSelector('mu', 0.005, 20)
-        f_selector_mu.fit(X, y)
-        print("--- 3. Feature Mutual Info: \n", f_selector_mu.get_feature_names_out())
+        #f_selector_mu = FeatureSelector('mu', 0.005, 20)
+        #f_selector_mu.fit(X_encoded, y)
+        #print("---. Feature Mutual Info: \n", f_selector_mu.get_feature_names_out())
 
-        # ReliefF può essere molto lento su dataset grandi, lo mettiamo per ultimo
-        #f_selector_rlf = FeatureSelector('rlf', 0.005, 20)
-        #f_selector_rlf.fit(X, y)
-        #sprint("--- 3. Feature ReliefF: \n", f_selector_rlf.get_feature_names_out())
-        pass
+        # Aggiorniamo X con le feature selezionate dal selettore tuned per il training successivo
+        X = f_selector_rf.transform(X_encoded)
+        print(f"Dataset finale per il training: {X.shape[1]} feature.")
+
 
 
     print(f"--- 3. Splitting and Training (Strategy {split_strategy}) ---")
     
+    # --- MODEL TUNING (Esempio per RandomForest) ---
+    print("Esecuzione tuning iperparametri per RandomForest...")
+    # Prepariamo i dati per il tuning (già filtrati dal selettore)
+    # Usiamo un sampling anche qui per velocità se necessario, o procediamo sul dataset filtrato
+    tuned_rf_model, best_rf_score, _ = tune_random_forest(X, y, n_iter=10)
+    print(f"Miglior Macro-F1 trovato per RF: {best_rf_score:.4f}")
+
     models_to_compare = {
-        "RandomForest": get_random_forest_model(),
+        "RandomForest_Tuned": tuned_rf_model,
         "XGBoost": get_xgboost_model(),
         "LightGBM": get_lightgbm_model()
     }
