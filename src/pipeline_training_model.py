@@ -61,6 +61,9 @@ def run_training_pipeline(feature_selection: bool = True, split_strategy: int = 
     print(f"--- 3. Splitting and Training (Strategy {split_strategy}) ---")
     
     models_to_compare = {
+        'DummyClassifier': get_dummy_classifier(),
+        'LogisticRegression': get_logistic_regression(),
+        'DescisionTree': get_decision_tree(),
         "RandomForest": get_random_forest_model(),
         "XGBoost": get_xgboost_model(),
         "LightGBM": get_lightgbm_model()
