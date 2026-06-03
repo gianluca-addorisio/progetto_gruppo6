@@ -1,7 +1,21 @@
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, DecisionTreeClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.dummy import DummyClassifier
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 from .config import RANDOM_STATE
+
+def get_dummy_classifier():
+    """Returns a baseline DummyClassifier."""
+    return DummyClassifier(strategy="most_frequent")
+
+def get_logistic_regression():
+    """Returns a configured LogisticRegression."""
+    return LogisticRegression(max_iter=1000, solver='lbfgs', random_state=RANDOM_STATE)
+
+def get_decision_tree():
+    """Returns a simple DecisionTreeClassifier."""
+    return DecisionTreeClassifier(max_depth=5, random_state=RANDOM_STATE)
 
 def get_random_forest_model():
     """Returns a configured RandomForestClassifier."""
