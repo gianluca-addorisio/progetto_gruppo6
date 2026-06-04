@@ -28,12 +28,24 @@ def run_training_pipeline(feature_selection: bool = False, split_strategy: int =
 
     print(f"--- 3. Splitting and Training (Strategy {split_strategy}) ---")
     
-    models_to_compare = {
-        "RandomForest": get_random_forest_model(),
-    #    "XGBoost": get_xgboost_model(),
-    #    "LightGBM": get_lightgbm_model()
-    # XGBoost e LightGBM saranno riattivati dopo aver verificato le dipendenze native dell'ambiente.
+    model_factories = {
+        "RandomForest": get_random_forest_model,
+        "XGBoost": get_xgboost_model,
+        "LightGBM": get_lightgbm_model,
     }
+
+    models_to_compare = {}
+
+    for name, factory in model_factories.items():
+        try:
+            models_to_compare[name] = factory()
+        except Exception as exc:
+            reason_lines = [line.strip() for line in str(exc).splitlines() if line.strip()]
+            reason = reason_lines[0] if reason_lines else "errore non specificato"
+            print(
+                f"Skipping {name}: modello non disponibile "
+                f"({exc.__class__.__name__}: {reason})"
+            )
 
     results = []
 
