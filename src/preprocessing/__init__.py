@@ -7,7 +7,7 @@ from .pipeline import get_preprocessing_pipeline, make_complete_pipeline
 from .cleaner import DataCleaner
 from .age_handler import AgeHandler
 from .outliers import OutlierCapper
-from .encoding import CategoricalEncoder
+from .encoding import CategoricalEncoder, FrequencyEncoder
 from .scaling import NumericalScaler
 
 __all__ = [
@@ -17,5 +17,6 @@ __all__ = [
     'AgeHandler',
     'OutlierCapper',
     'CategoricalEncoder',
+    'FrequencyEncoder',
     'NumericalScaler'
 ]

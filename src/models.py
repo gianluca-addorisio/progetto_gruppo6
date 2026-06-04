@@ -1,6 +1,5 @@
 from sklearn.ensemble import RandomForestClassifier
-from xgboost import XGBClassifier
-from lightgbm import LGBMClassifier
+
 from .config import RANDOM_STATE
 
 def get_random_forest_model():
@@ -13,6 +12,8 @@ def get_random_forest_model():
     )
 
 def get_xgboost_model():
+    from xgboost import XGBClassifier
+
     """Returns a configured XGBClassifier."""
     return XGBClassifier(
         n_estimators=100,
@@ -23,6 +24,8 @@ def get_xgboost_model():
     )
 
 def get_lightgbm_model():
+    from lightgbm import LGBMClassifier
+
     """Returns a configured LGBMClassifier."""
     return LGBMClassifier(
         n_estimators=100,

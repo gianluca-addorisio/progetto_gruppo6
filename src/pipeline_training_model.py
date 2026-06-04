@@ -11,7 +11,7 @@ from .evaluation import evaluate_predictions
 from .models import get_random_forest_model, get_xgboost_model, get_lightgbm_model
 from .config import RANDOM_STATE
 
-def run_training_pipeline(feature_selection: bool = False, split_strategy: int = 2):
+def run_training_pipeline(feature_selection: bool = False, split_strategy: int = 2, use_sample_weight: bool=False):
     """
     Main pipeline for loading data, training models and comparing results.
     """
@@ -30,8 +30,9 @@ def run_training_pipeline(feature_selection: bool = False, split_strategy: int =
     
     models_to_compare = {
         "RandomForest": get_random_forest_model(),
-        "XGBoost": get_xgboost_model(),
-        "LightGBM": get_lightgbm_model()
+    #    "XGBoost": get_xgboost_model(),
+    #    "LightGBM": get_lightgbm_model()
+    # XGBoost e LightGBM saranno riattivati dopo aver verificato le dipendenze native dell'ambiente.
     }
 
     results = []
@@ -44,16 +45,28 @@ def run_training_pipeline(feature_selection: bool = False, split_strategy: int =
         # BILANCIAMENTO: Calcoliamo i pesi per ogni riga del training set.
         # Le classi meno frequenti (come la Classe 1) riceveranno un peso maggiore.
         # Questo costringe il modello a dare più importanza agli errori sulle classi rare.
-        weights_train = compute_sample_weight(class_weight='balanced', y=y_train)
+        
+        # weights_train = compute_sample_weight(class_weight='balanced', y=y_train)
         
         for name, model in models_to_compare.items():
-            print(f"Training {name} con Pesi Bilanciati (per Macro-F1)...")
-            
-            # Creiamo una pipeline "piatta" (Preprocessing + Modello)
+            if use_sample_weight:
+                print(f"Training {name} con pesi bilanciati...")
+            else:
+                print(f"Training {name} senza pesi bilanciati...")
+                        
+            # Creiamo una pipeline "piatta" (Preprocessing + Modello):
             full_pipeline = make_complete_pipeline(model)
             
-            # Passiamo i pesi calcolati allo step 'model' della pipeline
-            full_pipeline.fit(X_train, y_train, model__sample_weight=weights_train)
+            # Se stiamo usando i pesi, li passiamo al fit del modello. Altrimenti, fit standard.
+            if use_sample_weight:
+                weights_train = compute_sample_weight(
+                    class_weight='balanced', 
+                    y=y_train,
+                )
+                full_pipeline.fit(X_train, y_train, model__sample_weight=weights_train)
+            else:
+                full_pipeline.fit(X_train, y_train)
+           
             y_pred = full_pipeline.predict(X_val)
             
             metrics = evaluate_predictions(y_val, y_pred, name)
@@ -65,22 +78,34 @@ def run_training_pipeline(feature_selection: bool = False, split_strategy: int =
         splits = data_loader.split_dataset_by_strategy(split_strategy, X, y)
 
         for name, model in models_to_compare.items():
-            print(f"Evaluating {name} via CV con Pesi Bilanciati...")
+            if use_sample_weight:
+                print(f"Evaluating {name} via CV con pesi bilanciati...")
+            else:
+                print(f"Evaluating {name} via CV senza pesi bilanciati...")
+
             fold_results = []
             
             for fold, (train_idx, val_idx) in enumerate(splits):
                 X_train_f, X_val_f = X.iloc[train_idx], X.iloc[val_idx]
                 y_train_f, y_val_f = y.iloc[train_idx], y.iloc[val_idx]
                 
-                # Calcoliamo i pesi bilanciati specifici per questo fold
-                weights_fold = compute_sample_weight(class_weight='balanced', y=y_train_f)
-                
-                # Creiamo una pipeline fresca e piatta per ogni fold
+                # Creiamo una pipeline per ogni fold
                 model_fold = clone(model)
                 full_pipeline = make_complete_pipeline(model_fold)
-                
-                # Applichiamo i pesi nel fit
-                full_pipeline.fit(X_train_f, y_train_f, model__sample_weight=weights_fold)
+
+                if use_sample_weight:
+                    weights_fold = compute_sample_weight(
+                        class_weight="balanced",
+                        y=y_train_f,
+                    )
+                    full_pipeline.fit(
+                        X_train_f,
+                        y_train_f,
+                        model__sample_weight=weights_fold,
+                    )
+                else:
+                    full_pipeline.fit(X_train_f, y_train_f)
+
                 y_pred = full_pipeline.predict(X_val_f)
                 
                 fold_metrics = evaluate_predictions(y_val_f, y_pred, name)

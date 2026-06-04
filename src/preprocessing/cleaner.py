@@ -15,6 +15,8 @@ class DataCleaner(BaseEstimator, TransformerMixin):
     """
     
     def __init__(self, additional_cols_to_drop=None):
+        self.additional_cols_to_drop = additional_cols_to_drop
+
         # Feature da rimuovere fisse (da src/preprocessing.py)
         self.final_drop_features = [
             'building_id', 
@@ -29,7 +31,7 @@ class DataCleaner(BaseEstimator, TransformerMixin):
             "legal_ownership_status",
         ]
         if additional_cols_to_drop:
-            self.final_drop_features.extend(additional_cols_to_drop)
+            self.final_drop_features.extend(self.additional_cols_to_drop)
 
     def _get_dynamic_drop_features(self, df: pd.DataFrame) -> list[str]:
         """Identifica le feature binarie originali da rimuovere dopo l'aggregazione."""
