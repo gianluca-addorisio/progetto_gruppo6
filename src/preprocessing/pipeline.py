@@ -44,12 +44,15 @@ def get_preprocessing_pipeline(scale_numeric=False):
     """
     return Pipeline(get_preprocessing_steps(scale_numeric))
 
-def make_complete_pipeline(model, scale_numeric=False):
+def make_complete_pipeline(model, scale_numeric=False, feature_selector=None):
     """
     Crea una pipeline "piatta" (non nidificata) che include sia 
     preprocessing che modello.
     """
     steps = get_preprocessing_steps(scale_numeric)
+    if feature_selector is not None:
+        steps.append(('feature_selection', feature_selector))
+
     steps.append(('model', model))
     
     return Pipeline(steps)

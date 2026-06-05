@@ -19,6 +19,7 @@ class FeatureSelector(BaseEstimator, TransformerMixin):
         self.threshold = threshold
         self.max_features_to_hold = max_features_to_hold
         self.selected_features_ = None
+        self.scores_ = None
 
     def fit(self, X: pd.DataFrame, y: pd.Series):
         """
@@ -48,14 +49,27 @@ class FeatureSelector(BaseEstimator, TransformerMixin):
         else:
             raise ValueError(f"Metodo {self.fs_method} non riconosciuto.")
 
-        # 2. Selezione delle feature che superano la soglia
-        top_features = scores[scores >= self.threshold].index.tolist()
+        # 2. Ordinamento e salvataggio degli score
+        scores = scores.dropna().sort_values(ascending=False)
+        self.scores_ = scores
+
+        # 3. Selezione delle feature che superano la soglia
+        selected_features = scores[scores >= self.threshold].index.tolist()
+
+        # 4. Fallback: se la soglia è troppo restrittiva, prendiamo comunque le migliori
+        if not selected_features:
+            selected_features = scores.index.tolist()
+
+        # 5. Applicazione del limite massimo di feature
+        self.selected_features_ = selected_features[:self.max_features_to_hold]
+
+        if not self.selected_features_:
+            raise ValueError("FeatureSelector non ha selezionato nessuna feature.")
         
-        # 3. Applicazione del limite massimo di feature
-        self.selected_features_ = top_features[:self.max_features_to_hold]
-        
-        print(f"FeatureSelector ({self.fs_method}): selezionate {len(self.selected_features_)} feature su {X.shape[1]}")
-        
+        print(
+            f"FeatureSelector ({self.fs_method}): selezionate "
+            f"{len(self.selected_features_)} feature su {X.shape[1]}"
+        )        
         return self
 
     def transform(self, X: pd.DataFrame):

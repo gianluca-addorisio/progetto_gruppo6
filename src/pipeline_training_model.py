@@ -9,9 +9,10 @@ from .data_loader import DataLoader
 from .preprocessing.pipeline import make_complete_pipeline
 from .evaluation import evaluate_predictions
 from .models import get_random_forest_model, get_xgboost_model, get_lightgbm_model
+from .featureselector import FeatureSelector
 from .config import RANDOM_STATE
 
-def run_training_pipeline(feature_selection: bool = False, split_strategy: int = 2, use_sample_weight: bool=False):
+def run_training_pipeline(feature_selection: bool = False, split_strategy: int = 2, use_sample_weight: bool=False, fs_method: str = "rf", fs_threshold: float = 0.005, max_features_to_hold: int = 30):
     """
     Main pipeline for loading data, training models and comparing results.
     """
@@ -21,10 +22,14 @@ def run_training_pipeline(feature_selection: bool = False, split_strategy: int =
     
     # Map labels to [0, 1, 2] for XGBoost/LightGBM compatibility
     y = y - 1
-    
+
     if feature_selection:
-        print("--- 2. Feature Selection (Placeholder) ---")
-        pass
+        print(
+            f"--- 2. Feature Selection attiva "
+            f"({fs_method}, threshold={fs_threshold}, max_features={max_features_to_hold}) ---"
+        )
+    else:
+        print("--- 2. Feature Selection non attiva ---")
 
     print(f"--- 3. Splitting and Training (Strategy {split_strategy}) ---")
     
@@ -67,7 +72,19 @@ def run_training_pipeline(feature_selection: bool = False, split_strategy: int =
                 print(f"Training {name} senza pesi bilanciati...")
                         
             # Creiamo una pipeline "piatta" (Preprocessing + Modello):
-            full_pipeline = make_complete_pipeline(model)
+            feature_selector = None
+
+            if feature_selection:
+                feature_selector = FeatureSelector(
+                    fs_method=fs_method,
+                    threshold=fs_threshold,
+                    max_features_to_hold=max_features_to_hold,
+                )
+
+            full_pipeline = make_complete_pipeline(
+                model,
+                feature_selector=feature_selector,
+            )            
             
             # Se stiamo usando i pesi, li passiamo al fit del modello. Altrimenti, fit standard.
             if use_sample_weight:
