@@ -8,6 +8,7 @@ from .age_handler import AgeHandler
 # from .outliers import OutlierCapper Rimossa perchè 
 from .encoding import CategoricalEncoder, FrequencyEncoder
 from .scaling import NumericalScaler
+from sklearn.decomposition import PCA
 
 # Importiamo la funzione per il feature engineering esistente
 from ..features import add_engineered_features
@@ -44,14 +45,21 @@ def get_preprocessing_pipeline(scale_numeric=False):
     """
     return Pipeline(get_preprocessing_steps(scale_numeric))
 
-def make_complete_pipeline(model, scale_numeric=False, feature_selector=None):
+def make_complete_pipeline(model, scale_numeric=False, feature_selector=None, use_pca=False, pca_n_components: int = 40):
     """
     Crea una pipeline "piatta" (non nidificata) che include sia 
     preprocessing che modello.
     """
+    if use_pca:
+        scale_numeric = True
+
     steps = get_preprocessing_steps(scale_numeric)
+    
     if feature_selector is not None:
-        steps.append(('feature_selection', feature_selector))
+        steps.append(('feature_selector', feature_selector))
+
+    if use_pca:
+        steps.append(('pca', PCA(n_components=pca_n_components, random_state=42)))
 
     steps.append(('model', model))
     

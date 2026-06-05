@@ -12,7 +12,7 @@ from .models import get_random_forest_model, get_xgboost_model, get_lightgbm_mod
 from .featureselector import FeatureSelector
 from .config import RANDOM_STATE
 
-def run_training_pipeline(feature_selection: bool = False, split_strategy: int = 2, use_sample_weight: bool=False, fs_method: str = "rf", fs_threshold: float = 0.005, max_features_to_hold: int = 30):
+def run_training_pipeline(feature_selection: bool = False, split_strategy: int = 2, use_sample_weight: bool=False, fs_method: str = "rf", fs_threshold: float = 0.005, max_features_to_hold: int = 30, use_pca: bool = False, pca_n_components: int =40):
     """
     Main pipeline for loading data, training models and comparing results.
     """
@@ -31,8 +31,19 @@ def run_training_pipeline(feature_selection: bool = False, split_strategy: int =
     else:
         print("--- 2. Feature Selection non attiva ---")
 
+    if use_pca:
+        print(f"--- PCA attiva ({pca_n_components} componenti) ---")
+    else:
+        print("--- PCA non attiva ---")
+        
+    if feature_selection and use_pca and pca_n_components > max_features_to_hold:
+        raise ValueError(
+            "pca_n_components non può essere maggiore di max_features_to_hold "
+            "quando feature_selection=True."
+        )
+
     print(f"--- 3. Splitting and Training (Strategy {split_strategy}) ---")
-    
+
     model_factories = {
         "RandomForest": get_random_forest_model,
         "XGBoost": get_xgboost_model,
@@ -84,8 +95,10 @@ def run_training_pipeline(feature_selection: bool = False, split_strategy: int =
             full_pipeline = make_complete_pipeline(
                 model,
                 feature_selector=feature_selector,
+                use_pca=use_pca,
+                pca_n_components=pca_n_components
             )            
-            
+
             # Se stiamo usando i pesi, li passiamo al fit del modello. Altrimenti, fit standard.
             if use_sample_weight:
                 weights_train = compute_sample_weight(
@@ -120,7 +133,22 @@ def run_training_pipeline(feature_selection: bool = False, split_strategy: int =
                 
                 # Creiamo una pipeline per ogni fold
                 model_fold = clone(model)
-                full_pipeline = make_complete_pipeline(model_fold)
+
+                feature_selector = None
+
+                if feature_selection:
+                    feature_selector = FeatureSelector(
+                        fs_method=fs_method,
+                        threshold=fs_threshold,
+                        max_features_to_hold=max_features_to_hold,
+                    )
+
+                full_pipeline = make_complete_pipeline(
+                    model_fold,
+                    feature_selector=feature_selector,
+                    use_pca=use_pca,
+                    pca_n_components=pca_n_components,
+                )
 
                 if use_sample_weight:
                     weights_fold = compute_sample_weight(
