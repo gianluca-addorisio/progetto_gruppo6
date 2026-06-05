@@ -12,7 +12,16 @@ from .models import get_random_forest_model, get_xgboost_model, get_lightgbm_mod
 from .featureselector import FeatureSelector
 from .config import RANDOM_STATE
 
-def run_training_pipeline(feature_selection: bool = False, split_strategy: int = 2, use_sample_weight: bool=False, fs_method: str = "rf", fs_threshold: float = 0.005, max_features_to_hold: int = 30, use_pca: bool = False, pca_n_components: int =40):
+def run_training_pipeline(
+    feature_selection: bool = False,
+    split_strategy: int = 2,
+    use_sample_weight: bool = False,
+    fs_method: str = "rf",
+    fs_threshold: float = 0.005,
+    max_features_to_hold: int = 30,
+    use_pca: bool = False,
+    pca_n_components: int = 40,
+):
     """
     Main pipeline for loading data, training models and comparing results.
     """
@@ -73,9 +82,7 @@ def run_training_pipeline(feature_selection: bool = False, split_strategy: int =
         # BILANCIAMENTO: Calcoliamo i pesi per ogni riga del training set.
         # Le classi meno frequenti (come la Classe 1) riceveranno un peso maggiore.
         # Questo costringe il modello a dare più importanza agli errori sulle classi rare.
-        
-        # weights_train = compute_sample_weight(class_weight='balanced', y=y_train)
-        
+                
         for name, model in models_to_compare.items():
             if use_sample_weight:
                 print(f"Training {name} con pesi bilanciati...")

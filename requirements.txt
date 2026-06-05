@@ -11,3 +11,4 @@ skrebate~=0.62
 tensorflow~=2.21.0
 xgboost~=3.2.0
 catboost~=1.2.10
+lightgbm~=4.6.0

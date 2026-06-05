@@ -30,7 +30,7 @@ class DataCleaner(BaseEstimator, TransformerMixin):
             "plan_configuration",
             "legal_ownership_status",
         ]
-        if additional_cols_to_drop:
+        if self.additional_cols_to_drop:
             self.final_drop_features.extend(self.additional_cols_to_drop)
 
     def _get_dynamic_drop_features(self, df: pd.DataFrame) -> list[str]:
