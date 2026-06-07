@@ -19,8 +19,6 @@ class DataCleaner(BaseEstimator, TransformerMixin):
         self.final_drop_features = [
             'building_id', 
             'damage_grade',
-            "area_percentage",
-            "height_percentage",
             "age_clipped",
             "age_group",
             "family_count_group",
@@ -41,6 +39,7 @@ class DataCleaner(BaseEstimator, TransformerMixin):
         ]
 
     def fit(self, X, y=None):
+        self.fitted_ = True
         return self
 
     def transform(self, X):

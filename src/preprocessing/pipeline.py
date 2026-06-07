@@ -8,6 +8,7 @@ from .age_handler import AgeHandler
 from .outliers import OutlierCapper
 from .encoding import CategoricalEncoder, FrequencyEncoder
 from .scaling import NumericalScaler
+from ..featureselector import FeatureSelector
 
 # Importiamo la funzione per il feature engineering esistente
 from ..features import add_engineered_features
@@ -54,11 +55,21 @@ def make_complete_pipeline(model, scale_numeric=True):
     
     return Pipeline(steps)
 
+def make_complete_pipeline_with_selection(model, fs_method='rf', threshold=0.005, max_features=20, scale_numeric=True):
+    """
+    Crea una pipeline completa che include:
+    1. Preprocessing
+    2. Feature Selection
+    3. Modello
+    """
+    steps = get_preprocessing_steps(scale_numeric)
+    steps.append(('selector', FeatureSelector(fs_method, threshold, max_features)))
+    steps.append(('model', model))
+    
+    return Pipeline(steps)
+
 def make_complete_pipeline_from_features(model, X, scale_numeric=True):
     """
-    Crea una pipeline che include non include il preprocessing
+    Crea una pipeline che include solo il modello (presuppone dati già preprocessati).
     """
-
     return Pipeline([('model', model)])
-
-

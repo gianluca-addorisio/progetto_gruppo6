@@ -26,14 +26,17 @@ class NumericalScaler(BaseEstimator, TransformerMixin):
             # Selezioniamo automaticamente le colonne numeriche (int e float)
             # Escludiamo quelle che sembrano essere binarie (0 e 1) per non rovinarle
             all_numeric = X.select_dtypes(include=['int64', 'float64', 'int32']).columns.tolist()
-            self.numeric_cols = [
+            self.numeric_cols_ = [
                 col for col in all_numeric 
                 if not X[col].isin([0, 1]).all() # Esclude le flag binarie (has_superstructure_...)
             ]
+        else:
+            self.numeric_cols_ = self.numeric_cols
             
-        if self.numeric_cols:
-            self.scaler.fit(X[self.numeric_cols])
+        if self.numeric_cols_:
+            self.scaler.fit(X[self.numeric_cols_])
             
+        self.fitted_ = True
         return self
 
     def transform(self, X):
@@ -42,7 +45,7 @@ class NumericalScaler(BaseEstimator, TransformerMixin):
         """
         X = X.copy()
         
-        if self.numeric_cols:
-            X[self.numeric_cols] = self.scaler.transform(X[self.numeric_cols])
+        if hasattr(self, 'numeric_cols_') and self.numeric_cols_:
+            X[self.numeric_cols_] = self.scaler.transform(X[self.numeric_cols_])
             
         return X
