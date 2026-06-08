@@ -2,7 +2,7 @@
 
 Questo documento raccoglie le principali decisioni metodologiche prese durante lo sviluppo del progetto **FIA Earthquake Damage Predictor**.
 
-L'obiettivo non è sostituire i notebook, ma mantenere una traccia sintetica, ordinata e aggiornata delle scelte operative che guidano preprocessing, feature engineering, feature selection e modellazione.
+L'obiettivo non è sostituire i notebook, ma mantenere una traccia sintetica, ordinata e aggiornata delle scelte operative che guidano preprocessing, feature engineering, feature selection, PCA, model comparison e tuning.
 
 ---
 
@@ -22,9 +22,9 @@ La metrica principale di valutazione è:
 
 - **micro-F1 score**
 
-La micro-F1 viene usata per confrontare baseline, modelli successivi, feature engineering, feature selection ed eventuali esperimenti di riduzione della dimensionalità.
+La micro-F1 viene usata per confrontare baseline, modelli successivi, feature engineering, feature selection, PCA ed eventuali esperimenti di tuning.
 
-Come metriche quantitative di supporto vengono considerate anche:
+Metriche quantitative di supporto:
 
 - macro-F1;
 - weighted-F1.
@@ -65,15 +65,15 @@ Motivazione:
 
 ---
 
-## 3. Feature set finale compatto
+## 3. Feature set compatto
 
-Dopo l'analisi di feature selection e i test diagnostici sulle principali famiglie di variabili, è stata adottata una versione compatta e interpretabile della feature matrix finale.
+Dopo l'analisi delle variabili e i test diagnostici sulle principali famiglie di feature, è stata adottata una rappresentazione compatta e interpretabile della feature matrix.
 
-L'obiettivo non è massimizzare ogni minimo incremento locale di performance, ma costruire una pipeline stabile, leggibile e difendibile, mantenendo le informazioni strutturali e geografiche principali.
+L'obiettivo non è mantenere ogni singola variabile originaria, ma costruire una pipeline stabile, leggibile e difendibile, conservando le informazioni strutturali, dimensionali e geografiche principali.
 
-### Feature finali prima dell'encoding
+### Feature principali prima dell'encoding
 
-La feature matrix preparata contiene 17 colonne prima dell'encoding:
+La rappresentazione compatta principale contiene le seguenti feature prima dell'encoding:
 
 - `geo_level_1_id`
 - `geo_level_2_id`
@@ -92,6 +92,12 @@ La feature matrix preparata contiene 17 colonne prima dell'encoding:
 - `has_fragile_material`
 - `has_engineered_structure`
 - `building_volume_proxy`
+
+Nella pipeline modulare aggiornata viene inoltre creata la feature:
+
+- `is_historic`
+
+Questa feature è prodotta da `AgeHandler` per distinguere i casi con `age = 995`.
 
 ---
 
@@ -133,20 +139,30 @@ Decisione finale:
 
 - mantenere `age`;
 - rimuovere `age_clipped`;
-- rimuovere `age_group`.
+- rimuovere `age_group`;
+- gestire `age = 995` tramite `AgeHandler`.
+
+La pipeline modulare crea:
+
+- `is_historic = 1` se `age = 995`, altrimenti `0`.
+
+Inoltre, durante il preprocessing:
+
+- `AgeHandler` sostituisce `age = 995` con la massima età normale osservata nel training set.
 
 Motivazione:
 
 - `age` conserva direttamente l'informazione sull'età dell'edificio;
 - `age_clipped` e `age_group` derivano da `age` e non aggiungono informazione indipendente;
 - `age_group` introduce soglie arbitrarie;
-- `age_clipped` modifica la distribuzione originale solo nella coda estrema;
-- i test diagnostici non hanno mostrato un beneficio robusto delle feature derivate rispetto alla variabile originale.
+- `is_historic` conserva invece in modo esplicito l'informazione che `995` rappresenta un caso speciale;
+- la sostituzione di `995` riduce l'effetto di un valore numerico estremo sulla pipeline;
+- la trasformazione viene appresa solo sul training set quando la pipeline è usata correttamente.
 
 Nota:
 
-- il valore `age = 995` resta riconosciuto come valore estremo o codificato in modo particolare;
-- non vengono modificati i dati originali in `data/raw/`.
+- i dati originali in `data/raw/` non vengono modificati;
+- `is_historic` è una scelta della pipeline modulare aggiornata e va considerata parte del preprocessing finale attuale.
 
 ---
 
@@ -241,7 +257,7 @@ Motivazione:
 
 - `count_floors_pre_eq` rappresenta una caratteristica strutturale diretta dell'edificio;
 - `count_families` contiene un segnale debole ma misurabile e ha costo nullo in termini di encoding;
-- `age` conserva l'informazione originale sull'età dell'edificio.
+- `age` conserva l'informazione originale sull'età dell'edificio, con gestione specifica del valore speciale `995`.
 
 Non vengono introdotte nella pipeline finale:
 
@@ -296,103 +312,330 @@ Nota metodologica:
 
 ## 11. Preprocessing finale
 
-La pipeline finale di preprocessing è implementata in:
+La pipeline ufficiale di preprocessing è ora implementata come package modulare in:
 
-- `src/features.py`
+- `src/preprocessing/`
+
+Il vecchio file:
+
 - `src/preprocessing.py`
 
-Operazioni principali:
+resta presente come componente legacy/backward-compatible, ma non rappresenta più la source of truth della pipeline finale.
 
-1. rimozione di identificativi e target se presenti;
-2. creazione delle feature aggregate e del proxy dimensionale;
-3. rimozione delle feature escluse o compresse;
-4. one-hot encoding delle categoriche a bassa cardinalità;
-5. one-hot encoding di `geo_level_1_id`;
-6. frequency encoding di `geo_level_2_id` e `geo_level_3_id`;
-7. passthrough o scaling delle feature numeriche a seconda del modello.
+La pipeline modulare è composta dai seguenti step:
 
-Il preprocessing produce una matrice compatta, coerente con le decisioni di feature selection e adatta alla model comparison successiva.
+1. `feature_engineering`: crea le feature aggregate tramite `src/features.py`;
+2. `DataCleaner`: rimuove identificativi, target accidentale, feature escluse e feature originali ormai compresse;
+3. `AgeHandler`: gestisce il valore speciale `age = 995`;
+4. `FrequencyEncoder`: applica frequency encoding a `geo_level_2_id` e `geo_level_3_id`;
+5. `CategoricalEncoder`: applica one-hot encoding alle categoriche strutturali e a `geo_level_1_id`;
+6. `NumericalScaler`: applicato solo quando richiesto, ad esempio per PCA o modelli sensibili alla scala.
 
----
+La pipeline finale viene costruita tramite:
 
-## 12. Smoke test della pipeline finale
+- `get_preprocessing_pipeline()`: solo preprocessing;
+- `make_complete_pipeline()`: preprocessing + eventuale feature selection + eventuale PCA + modello.
 
-Dopo l'implementazione della pipeline finale è stato eseguito uno smoke test con:
+La sequenza corretta è:
 
-- split train/validation stratificato;
-- `DecisionTreeClassifier(max_depth=12)`;
-- metriche micro-F1, macro-F1 e weighted-F1.
+```text
+raw data
+→ split train/validation
+→ fit preprocessing solo sul training set
+→ transform validation/test
+→ eventuale FeatureSelector
+→ eventuale PCA
+→ modello
+```
 
-Risultati osservati:
+Questa struttura riduce il rischio di data leakage, perché ogni trasformazione che apprende statistiche dai dati viene fittata solo sul training set o sul fold di training durante la cross-validation.
 
-- feature prima del preprocessing: 17;
-- feature dopo encoding/preprocessing: 65;
-- micro-F1: circa `0.70265`;
-- macro-F1: circa `0.62362`;
-- weighted-F1: circa `0.68989`.
-
-Il test conferma che:
-
-- la pipeline funziona correttamente;
-- la strategia geografica ibrida è operativa;
-- la feature matrix finale mantiene una dimensionalità contenuta;
-- le performance restano coerenti con i test diagnostici precedenti.
+`OutlierCapper` resta disponibile come componente, ma non è incluso nella pipeline standard, perché nella configurazione attuale le colonne su cui agiva vengono già rimosse da `DataCleaner`.
 
 ---
 
-## 13. PCA / dimensionality reduction
+## 12. Training pipeline e valutazione baseline
+
+La training pipeline principale è implementata in:
+
+- `src/pipeline_training_model.py`
+
+La funzione principale è:
+
+- `run_training_pipeline()`
+
+Questa funzione consente di configurare:
+
+- feature selection opzionale;
+- PCA opzionale;
+- sample weighting opzionale;
+- strategia di split;
+- metodo e soglie della feature selection;
+- numero di componenti PCA.
+
+La pipeline lavora sui dati raw e costruisce internamente il flusso:
+
+```text
+raw data
+→ split
+→ preprocessing
+→ eventuale FeatureSelector
+→ eventuale PCA
+→ modello
+→ metriche
+```
+
+Questo rende il flusso più sicuro rispetto a soluzioni che applicano preprocessing o feature selection sull'intero dataset prima dello split.
+
+### Baseline RandomForest
+
+Con `RandomForestClassifier` e pipeline modulare senza feature selection e senza PCA:
+
+```text
+micro-F1:    circa 0.6921
+macro-F1:    circa 0.6107
+weighted-F1: circa 0.6722
+```
+
+Questa baseline è il riferimento operativo attuale per confrontare feature selection, PCA e tuning.
+
+---
+
+## 13. Feature selection
+
+La feature selection è stata integrata come componente opzionale della pipeline tramite:
+
+- `src/featureselector.py`
+- `FeatureSelector`
+
+Il selector viene inserito dopo il preprocessing e prima del modello:
+
+```text
+preprocessing
+→ FeatureSelector
+→ model
+```
+
+Questa scelta è metodologicamente importante perché evita di fittare la selezione delle feature sull'intero dataset prima dello split.
+
+Il `FeatureSelector` supporta più metodi:
+
+- `rf`: Random Forest importance;
+- `xgb`: XGBoost importance;
+- `ctb`: CatBoost importance;
+- `corr_matrix`: correlazione con il target;
+- `chi2`: Chi-square;
+- `mu`: mutual information;
+- `rlf`: ReliefF.
+
+Decisione operativa:
+
+- usare inizialmente `rf` come metodo principale;
+- trattare `xgb`, `ctb`, `rlf` come metodi opzionali, perché dipendono da librerie più pesanti o da configurazioni ambiente specifiche;
+- non usare feature selection come default obbligatorio finché non migliora stabilmente rispetto alla configurazione migliore con PCA.
+
+Risultati osservati con RandomForest:
+
+```text
+Senza feature selection:
+micro-F1    ≈ 0.6921
+macro-F1    ≈ 0.6107
+weighted-F1 ≈ 0.6722
+
+Feature Selection RF, 30 feature:
+micro-F1    ≈ 0.6859
+macro-F1    ≈ 0.6020
+weighted-F1 ≈ 0.6623
+
+Feature Selection RF, 50 feature:
+micro-F1    ≈ 0.6944
+macro-F1    ≈ 0.6161
+weighted-F1 ≈ 0.6764
+```
+
+Conclusione:
+
+- la feature selection è implementata e funzionante;
+- la selezione a 30 feature risulta troppo aggressiva;
+- la selezione RF a 50 feature migliora leggermente la baseline;
+- al momento non supera la configurazione con PCA a 40 componenti.
+
+---
+
+## 14. PCA / dimensionality reduction
+
+La PCA è stata implementata come step opzionale della pipeline.
 
 Decisione:
 
 - PCA non deve essere applicata sui dati grezzi;
-- PCA può essere considerata solo come esperimento secondario;
-- PCA deve essere applicata solo dopo preprocessing numerico e scaling.
+- PCA deve essere applicata solo dopo preprocessing numerico e scaling;
+- quando `use_pca=True`, la pipeline forza automaticamente `scale_numeric=True`;
+- PCA resta un esperimento/configurazione opzionale, non un default obbligatorio.
 
 Motivazione:
 
 - il dataset contiene variabili categoriche, binarie e identificativi geografici;
 - applicare PCA direttamente sui dati grezzi sarebbe metodologicamente scorretto;
-- PCA può essere utile come confronto didattico/metodologico, ma non è il cuore della pipeline.
+- PCA può essere utile dopo preprocessing completo, quando la matrice è numerica;
+- la PCA permette di testare se una rappresentazione compressa migliora la generalizzazione.
 
-Esperimento previsto:
+Risultati osservati con RandomForest:
 
-- preparare matrice numerica dopo preprocessing;
-- applicare scaling;
-- applicare PCA;
-- valutare varianza spiegata;
-- confrontare micro-F1 con e senza PCA.
+```text
+PCA 10:
+micro-F1    ≈ 0.6162
+macro-F1    ≈ 0.5068
+weighted-F1 ≈ 0.5763
+
+PCA 20:
+micro-F1    ≈ 0.6840
+macro-F1    ≈ 0.5948
+weighted-F1 ≈ 0.6650
+
+PCA 30:
+micro-F1    ≈ 0.6912
+macro-F1    ≈ 0.6100
+weighted-F1 ≈ 0.6773
+
+PCA 40:
+micro-F1    ≈ 0.6983
+macro-F1    ≈ 0.6223
+weighted-F1 ≈ 0.6866
+
+PCA 50:
+micro-F1    ≈ 0.6980
+macro-F1    ≈ 0.6221
+weighted-F1 ≈ 0.6864
+```
+
+È stato inoltre testato lo scaling senza PCA:
+
+```text
+RF + scaling only:
+micro-F1    ≈ 0.6921
+macro-F1    ≈ 0.6106
+weighted-F1 ≈ 0.6722
+```
+
+Conclusione:
+
+- il miglioramento non dipende dal solo scaling;
+- PCA a 40 componenti è la migliore configurazione osservata finora;
+- PCA a 10 componenti è troppo aggressiva;
+- PCA 40 è una configurazione candidata per la pipeline finale.
+
+Confronto aggiuntivo:
+
+```text
+Feature Selection RF 50 + PCA 40:
+micro-F1    ≈ 0.6975
+macro-F1    ≈ 0.6204
+weighted-F1 ≈ 0.6856
+```
+
+La combinazione FS 50 + PCA 40 funziona, ma non supera PCA 40 senza feature selection.
+
+---
+
+## 15. Sample weighting
+
+È stato testato l'uso di pesi bilanciati tramite:
+
+- `compute_sample_weight(class_weight="balanced", y=y_train)`
+
+Decisione:
+
+- `sample_weight` resta disponibile come opzione;
+- non viene usato come default.
+
+Motivazione:
+
+- i pesi bilanciati possono aiutare le classi meno frequenti;
+- tuttavia, nel test osservato, migliorano la macro-F1 ma peggiorano sensibilmente la micro-F1;
+- poiché la metrica principale del progetto è micro-F1, l'uso dei pesi bilanciati non è mantenuto come default.
+
+Risultati osservati con RandomForest:
+
+```text
+Senza sample_weight:
+micro-F1    ≈ 0.6921
+macro-F1    ≈ 0.6107
+weighted-F1 ≈ 0.6722
+
+Con sample_weight bilanciato:
+micro-F1    ≈ 0.6478
+macro-F1    ≈ 0.6280
+weighted-F1 ≈ 0.6509
+```
+
+Conclusione:
+
+- `sample_weight` è utile come esperimento orientato alla macro-F1;
+- non è coerente come default se l'obiettivo principale resta micro-F1.
+
+---
+
+## 16. Modelli opzionali e dipendenze ambiente
+
+La pipeline supporta:
+
+- RandomForest;
+- XGBoost;
+- LightGBM.
+
+Decisione:
+
+- RandomForest resta il modello baseline stabile;
+- XGBoost e LightGBM vengono trattati come modelli opzionali;
+- se le dipendenze native non sono disponibili, questi modelli vengono saltati senza bloccare l'intera pipeline.
+
+Motivazione:
+
+- su macOS XGBoost e LightGBM possono richiedere `libomp`;
+- un problema di ambiente non deve impedire l'esecuzione della baseline;
+- la pipeline deve restare eseguibile anche se i modelli avanzati non sono disponibili localmente.
+
+Nota:
+
+- `lightgbm` è stato aggiunto a `requirements.txt`;
+- su macOS potrebbe essere comunque necessario installare `libomp` tramite Homebrew.
+
+---
+
+## 17. Tuning
+
+Il tuning degli iperparametri è stato avviato come area di lavoro separata.
+
+Decisione:
+
+- non integrare direttamente tuning non ancora riallineato alla pipeline attuale;
+- il tuning deve essere eseguito sopra la pipeline modulare aggiornata;
+- il tuning deve rispettare la sequenza anti-leakage:
+
+```text
+split/CV
+→ fit preprocessing solo su train/fold
+→ eventuale FeatureSelector
+→ eventuale PCA
+→ model
+```
+
+Nota metodologica:
+
+- non è valido fare `fit_transform(X)` sull'intero dataset prima dello split;
+- non è valido fare feature selection o tuning su tutto `X, y` prima della validation;
+- il criterio principale di tuning dovrebbe essere coerente con la metrica primaria, quindi micro-F1;
+- macro-F1 può restare metrica secondaria o obiettivo alternativo dichiarato.
 
 Stato:
 
-- non ancora implementata;
-- da trattare dopo una pipeline di preprocessing stabile e una prima model comparison.
+- tuning non ancora consolidato nella pipeline finale;
+- da riallineare alla versione aggiornata di `make_complete_pipeline()`.
 
 ---
 
-## 14. Feature selection e model comparison
-
-La feature selection è stata usata per arrivare a un feature set compatto e interpretabile.
-
-Le prossime fasi dovranno verificare quantitativamente la robustezza delle scelte effettuate attraverso:
-
-- confronto tra modelli diversi;
-- feature importance da modelli tree-based;
-- eventuale permutation importance;
-- confronto micro-F1 con e senza eventuali gruppi di feature;
-- valutazione della stabilità delle performance.
-
-Modelli candidati per la model comparison:
-
-- Logistic Regression;
-- Decision Tree;
-- Random Forest;
-- ExtraTrees;
-- Gradient Boosting;
-- eventuale XGBoost o LightGBM se compatibile con l'ambiente.
-
----
-
-## 15. Integrazione con il lavoro di preprocessing parallelo
+## 18. Integrazione con il lavoro di preprocessing parallelo
 
 Nel branch `data_preprocessing` è stata introdotta una cartella separata:
 
@@ -403,18 +646,18 @@ Questa cartella contiene una pipeline parallela/sperimentale di preprocessing.
 Decisione:
 
 - non integrare direttamente questa cartella nella pipeline finale in questa fase;
-- mantenere come pipeline stabile per la modellazione il codice contenuto in `src/`;
+- mantenere come pipeline ufficiale il package modulare `src/preprocessing/`;
 - valutare successivamente se recuperare singole idee o funzioni dal branch parallelo, evitando duplicazioni e conflitti.
 
 Motivazione:
 
-- la pipeline finale del progetto è già centralizzata in `src/`;
-- la cartella `preprocessing/` usa una struttura parallela e non ancora allineata alle decisioni finali di feature selection;
+- la pipeline finale del progetto è ora centralizzata in `src/preprocessing/`;
+- la cartella `preprocessing/` usa una struttura parallela e non completamente allineata alle decisioni finali;
 - l'integrazione diretta rischierebbe di introdurre duplicazione o incoerenza.
 
 ---
 
-## 16. Manutenzione repository e pulizia branch
+## 19. Manutenzione repository e pulizia branch
 
 Dopo l'integrazione dei contributi principali nel branch `dev`, il gruppo ha deciso di avviare una pulizia dei branch remoti ormai già mergiati, superati o non più operativi.
 
@@ -422,17 +665,17 @@ Questa decisione non riguarda la metodologia di modellazione, ma l'organizzazion
 
 Branch remoti rimossi perché già integrati in `dev`:
 
-- `cleanup/final-integration`: branch di integrazione intermedia usato per raccogliere la struttura comune del progetto, i notebook già revisionati, la documentazione iniziale e le utility condivise.
-- `feature/03-feature-comprehension`: branch relativo al contributo sul notebook 03, dedicato alla comprensione semantica delle feature e alle note operative preliminari.
-- `feature/feature-engineering-selection`: branch relativo al notebook 04, alla feature engineering e alla prima versione del decision log metodologico.
-- `feature/feature-selection`: branch relativo al notebook 06 e alla prima analisi di feature selection, poi integrato nel flusso principale di sviluppo.
+- `cleanup/final-integration`
+- `feature/03-feature-comprehension`
+- `feature/feature-engineering-selection`
+- `feature/feature-selection`
 
 Branch remoti rimossi perché superati dalle versioni presenti in `dev` o non più operativi:
 
-- `analisi/01-analisi-dati`: branch relativo a una versione precedente del notebook 01. La versione presente in `dev` risulta più aggiornata e completa.
-- `baseline/05-baseline-modeling`: branch relativo a una versione precedente del notebook 05. La versione presente in `dev` contiene modifiche successive e risulta più aggiornata.
-- `preprocessing/02_qualita_dati`: branch relativo al notebook 02. La parte utile, in particolare la sezione finale di riepilogo, viene recuperata manualmente nel notebook presente su `dev`, evitando il merge diretto del branch vecchio.
-- `sistemazione-pipeline-progetto`: branch storico usato per sistemare struttura, README, `.gitignore` e organizzazione iniziale della pipeline. Il contenuto utile risulta ormai superato o già assorbito nella struttura attuale di `dev`.
+- `analisi/01-analisi-dati`
+- `baseline/05-baseline-modeling`
+- `preprocessing/02_qualita_dati`
+- `sistemazione-pipeline-progetto`
 
 La rimozione di questi branch non elimina i commit già integrati o recuperati nel progetto. La cancellazione rimuove soltanto riferimenti remoti non più operativi.
 
@@ -446,19 +689,27 @@ Decisione operativa:
 
 ---
 
-## 17. Stato attuale e prossimi step
+## 20. Stato attuale e prossimi step
 
 Alla data di questo aggiornamento:
 
-- `src/features.py` contiene solo le feature ingegnerizzate mantenute nel feature set finale;
-- `src/preprocessing.py` implementa la pipeline finale compatta, incluso l'encoding geografico ibrido;
-- il feature set finale è stato validato con smoke test;
-- la cartella `preprocessing/` resta separata e non viene usata come pipeline finale;
-- il repository è stato pulito dai branch remoti superati.
+- `src/features.py` contiene le feature ingegnerizzate mantenute nel feature set finale;
+- `src/preprocessing/` implementa la pipeline modulare ufficiale;
+- `src/preprocessing.py` resta come file legacy/backward-compatible;
+- la pipeline lavora sui dati raw e applica preprocessing, feature selection opzionale, PCA opzionale e modello dentro una pipeline sklearn;
+- `AgeHandler` gestisce il valore speciale `age = 995` e crea `is_historic`;
+- `FeatureSelector` è integrato in modo opzionale e leak-safe;
+- PCA è integrata come step opzionale e la configurazione a 40 componenti è la migliore osservata finora con RandomForest;
+- `sample_weight` è disponibile ma non usato come default;
+- XGBoost e LightGBM sono gestiti come modelli opzionali;
+- la cartella `preprocessing/` resta separata e non viene usata come pipeline finale.
 
 Prossimi step:
 
-- eseguire model comparison sulla pipeline aggiornata;
-- valutare eventuale PCA come esperimento secondario;
-- procedere con tuning e final evaluation;
-- coordinare l'integrazione del lavoro sviluppato sul branch `gianluca` con il lavoro di Claudia presente nel branch `data_preprocessing`, utilizzando il branch dedicato `merge_preprocessing` creato da Nicola per gestire il merge tra le due linee di sviluppo.
+- riallineare il tuning alla pipeline aggiornata;
+- rieseguire model comparison finale su configurazioni comparabili;
+- valutare se usare PCA 40 nella configurazione finale;
+- salvare metriche finali in `outputs/metrics/`;
+- produrre eventuale final evaluation/submission;
+- aggiornare worklog condiviso;
+- comunicare al gruppo lo stato aggiornato della pipeline.

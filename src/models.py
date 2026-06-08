@@ -6,17 +6,21 @@ from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 from .config import RANDOM_STATE
 
+
 def get_dummy_classifier():
     """Returns a baseline DummyClassifier."""
     return DummyClassifier(strategy="most_frequent")
+
 
 def get_logistic_regression():
     """Returns a configured LogisticRegression."""
     return LogisticRegression(max_iter=1000, solver='lbfgs', random_state=RANDOM_STATE)
 
+
 def get_decision_tree():
     """Returns a simple DecisionTreeClassifier."""
     return DecisionTreeClassifier(max_depth=5, random_state=RANDOM_STATE)
+
 
 def get_random_forest_model():
     """Returns a configured RandomForestClassifier."""
@@ -28,6 +32,7 @@ def get_random_forest_model():
         n_jobs=-1,
     )
 
+
 def get_xgboost_model():
     """Returns a configured XGBClassifier."""
     return XGBClassifier(
@@ -36,8 +41,8 @@ def get_xgboost_model():
         max_depth=10,
         random_state=RANDOM_STATE,
         eval_metric="mlogloss",
-        n_jobs=-1,
     )
+
 
 def get_lightgbm_model():
     """Returns a configured LGBMClassifier."""
@@ -49,4 +54,3 @@ def get_lightgbm_model():
         n_jobs=-1,
         verbosity=-1
     )
-

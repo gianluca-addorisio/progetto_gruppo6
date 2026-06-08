@@ -2,15 +2,9 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_selection import chi2, mutual_info_classif
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
-from skrebate import ReliefF
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Dense
-from tensorflow.keras.optimizers import Adam
-from xgboost import XGBClassifier
-from catboost import CatBoostClassifier
-from .utils import plot_feature_ranking, plot_correlation_heatmap
+from .utils import plot_feature_ranking
 
 class FeatureSelection:
     """
@@ -77,6 +71,9 @@ class FeatureSelection:
     @staticmethod
     def xgboost_importances(X: pd.DataFrame, y: pd.Series) -> pd.Series:
         """Calcola l'importanza delle feature tramite XGBoost."""
+        from sklearn.preprocessing import LabelEncoder
+        from xgboost import XGBClassifier
+        
         model = XGBClassifier(n_estimators=100, random_state=42, eval_metric="logloss")
         le = LabelEncoder()
         y_encoded = le.fit_transform(y)
@@ -89,6 +86,9 @@ class FeatureSelection:
     @staticmethod
     def catboost_importances(X: pd.DataFrame, y: pd.Series) -> pd.Series:
         """Calcola l'importanza delle feature tramite CatBoost."""
+        from sklearn.preprocessing import LabelEncoder
+        from catboost import CatBoostClassifier
+
         # In questo stadio X è già numerico, quindi non servono cat_features
         model = CatBoostClassifier(iterations=100, random_state=42, verbose=0)
         le = LabelEncoder()
@@ -101,6 +101,8 @@ class FeatureSelection:
 
     def relief_importances(self, X: pd.DataFrame, y: pd.Series) -> pd.Series:
         """Calcola l'importanza delle feature tramite l'algoritmo ReliefF."""
+        from skrebate import ReliefF
+        
         relief = ReliefF(n_neighbors=100)
         relief.fit(X.values, y.values)
         
@@ -125,6 +127,10 @@ class FeatureSelection:
     @staticmethod
     def autoencoder_extraction(X: pd.DataFrame, encoding_dim: int = 16, epochs: int = 10):
         """Esegue la Feature Extraction tramite Autoencoder."""
+        from tensorflow.keras.models import Model
+        from tensorflow.keras.layers import Input, Dense
+        from tensorflow.keras.optimizers import Adam
+        
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
         input_dim = X_scaled.shape[1]
@@ -147,5 +153,4 @@ class FeatureSelection:
             columns=[f"AE_Feature_{i+1}" for i in range(encoding_dim)],
             index=X.index
         )
-
-
+    
