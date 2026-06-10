@@ -56,21 +56,19 @@ def get_lightgbm_model():
     )
 
 
-def get_voting_ensemble():
+def get_voting_ensemble(rf_model=None, xgb_model=None, lgbm_model=None):
     """
     Combina RandomForest, XGBoost e LightGBM tramite Soft Voting.
     Utile per ridurre la varianza e stabilizzare le predizioni.
     """
-    rf = get_random_forest_model()
-    xgb = get_xgboost_model()
-    lgbm = get_lightgbm_model()
+    estimators = [
+        ('rf', rf_model if rf_model else get_random_forest_model()),
+        ('xgb', xgb_model if xgb_model else get_xgboost_model()),
+        ('lgbm', lgbm_model if lgbm_model else get_lightgbm_model())
+    ]
 
     return VotingClassifier(
-        estimators=[
-            ('rf', rf),
-            ('xgb', xgb),
-            ('lgbm', lgbm)
-        ],
+        estimators=estimators,
         voting='soft',
         n_jobs=-1
     )
