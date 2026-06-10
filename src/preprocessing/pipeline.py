@@ -79,7 +79,7 @@ def make_complete_pipeline_with_selection(model, fs_method='rf', threshold=0.005
     3. Modello
     """
     steps = get_preprocessing_steps(scale_numeric)
-    steps.append(('selector', FeatureSelector(fs_method, threshold, max_features)))
+    steps.append(('feature_selector', FeatureSelector(fs_method, threshold, max_features)))
     steps.append(('model', model))
 
     return Pipeline(steps)

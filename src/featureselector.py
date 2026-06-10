@@ -46,6 +46,10 @@ class FeatureSelector(BaseEstimator, TransformerMixin):
             scores = fs.information_gain_scores(X, y)
         elif self.fs_method == 'rlf':
             scores = fs.relief_importances(X, y)
+        elif self.fs_method == 'rfe':
+            scores = fs.rfe_selection(X, y, n_features_to_select=self.max_features_to_hold)
+        elif self.fs_method == 'sfs':
+            scores = fs.sfs_selection(X, y, n_features_to_select=self.max_features_to_hold)
         else:
             raise ValueError(f"Metodo {self.fs_method} non riconosciuto.")
 

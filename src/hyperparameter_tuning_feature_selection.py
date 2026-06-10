@@ -1,23 +1,43 @@
 from scipy.stats import randint, uniform
 from sklearn.model_selection import RandomizedSearchCV
+import pandas as pd
 
-def hyperparameter_tune_fs(pipeline, X, y, num_iter=20):
-    method_selected = pipeline.named_steps['selector'].fs_method
+class FeatureSelectionTuner:
+    """
+    Classe semplificata per l'ottimizzazione della Feature Selection.
+    Usa il nome fisso 'feature_selector' per coerenza con la pipeline.
+    """
 
-    params_to_tune = {
-        'selector__max_features_to_hold': randint(10, 40)
-    }
+    def __init__(self, random_state=42, n_splits=5):
+        self.random_state = random_state
+        self.n_splits = n_splits
 
-    #andiamo a definire il range di threshold in base al metodo di fs selezionato
-    if method_selected in ['rf', 'xgb', 'ctb', 'mu']:
-        #metodi il quale rating è compreso tra 0 e 1
-        params_to_tune['selector__threshold'] = uniform(0,0.02)
-    elif method_selected == 'corr_matrix':
-        params_to_tune['selector__threshold'] = uniform(0,0.5)
-    else:
-        params_to_tune['selector__threshold'] = uniform(0)
-    search = RandomizedSearchCV(pipeline, params_to_tune, n_iter=num_iter, cv=5, scoring='f1_micro')
-    search.fit(X, y)
-    return search.best_params_
+    def tune_pipeline(self, pipeline, model_name, param_grid_model, X, y, n_iter=30):
+        """
+        Ottimizzazione congiunta di Feature Selection e Modello.
+        Mantiene fisso il metodo di FS scelto dall'utente e ne ottimizza i parametri.
+        """
+        # Griglia per la Feature Selection (usando il nome fisso 'feature_selector')
+        # Rimuoviamo 'fs_method' dalla griglia così rimane quello impostato nella pipeline
+        param_grid = {
+            'feature_selector__max_features_to_hold': randint(15, 45),
+            'feature_selector__threshold': uniform(0, 0.05)
+        }
+        
+        # Aggiungiamo i parametri del modello (che usano il prefisso 'model__')
+        param_grid.update(param_grid_model)
 
+        search = RandomizedSearchCV(
+            pipeline, 
+            param_distributions=param_grid, 
+            n_iter=n_iter, 
+            cv=self.n_splits, 
+            scoring='f1_micro',
 
+            random_state=self.random_state,
+            n_jobs=-1,
+            verbose=1
+        )
+        search.fit(X, y)
+        
+        return search.best_estimator_, search.best_params_, search.best_score_

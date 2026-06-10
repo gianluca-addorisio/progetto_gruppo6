@@ -66,8 +66,8 @@ class CategoricalEncoder(BaseEstimator, TransformerMixin):
 
     def fit(self, X, y=None):
         if self.categorical_cols is None:
-            # Prendiamo le colonne 'object' o 'category', escludendo quelle geografiche ad alta cardinalità
-            all_cat = X.select_dtypes(include=['object', 'category']).columns.tolist()
+            # Prendiamo le colonne 'object', 'category' e 'string' per evitare warning futuri
+            all_cat = X.select_dtypes(include=['object', 'category', 'string']).columns.tolist()
             # Aggiungiamo geo_level_1_id se presente e non già incluso
             if 'geo_level_1_id' in X.columns and 'geo_level_1_id' not in all_cat:
                 all_cat.append('geo_level_1_id')

@@ -124,6 +124,32 @@ class FeatureSelection:
             index=X.index
         )
 
+    def rfe_selection(self, X: pd.DataFrame, y: pd.Series, n_features_to_select: int = 30) -> pd.Series:
+        """Seleziona le feature tramite Recursive Feature Elimination (RFE)."""
+        from sklearn.feature_selection import RFE
+        from sklearn.ensemble import RandomForestClassifier
+        
+        estimator = RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=-1)
+        selector = RFE(estimator, n_features_to_select=n_features_to_select, step=5)
+        selector = selector.fit(X, y)
+        
+        # Creiamo un ranking invertito (1 è il migliore, quindi lo trasformiamo per coerenza con gli altri metodi)
+        ranking = pd.Series(1.0 / selector.ranking_, index=X.columns).sort_values(ascending=False)
+        return ranking
+
+    def sfs_selection(self, X: pd.DataFrame, y: pd.Series, n_features_to_select: int = 15) -> pd.Series:
+        """Seleziona le feature tramite Sequential Feature Selection (SFS)."""
+        from sklearn.feature_selection import SequentialFeatureSelector
+        from sklearn.linear_model import LogisticRegression
+        
+        estimator = LogisticRegression(max_iter=500)
+        sfs = SequentialFeatureSelector(estimator, n_features_to_select=n_features_to_select, direction='forward', n_jobs=-1)
+        sfs.fit(X, y)
+        
+        # SFS restituisce una maschera booleana
+        scores = pd.Series(sfs.get_support().astype(float), index=X.columns).sort_values(ascending=False)
+        return scores
+
     @staticmethod
     def autoencoder_extraction(X: pd.DataFrame, encoding_dim: int = 16, epochs: int = 10):
         """Esegue la Feature Extraction tramite Autoencoder."""
