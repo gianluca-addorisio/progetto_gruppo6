@@ -20,6 +20,7 @@ from .hyperparameter_tuning_feature_selection import FeatureSelectionTuner
 
 from sklearn.model_selection import train_test_split
 
+
 def run_training_pipeline(
     feature_selection: bool = True,
     split_strategy: int = 4,
@@ -31,7 +32,8 @@ def run_training_pipeline(
     pca_n_components: int = 40,
     do_tuning: bool = False,
     tuning_iter: int = 50,
-    tuning_sample_size: int = 30000
+    tuning_sample_size: int = 30000,
+    models_to_run=None,
 ):
     """
     Pipeline principale ottimizzata:
@@ -64,6 +66,22 @@ def run_training_pipeline(
         }
     }
 
+    valid_models = ["RandomForest", "XGBoost", "LightGBM", "VotingEnsemble", "StackingEnsemble"]
+
+    if models_to_run is None:
+        models_to_run = valid_models.copy()
+    elif isinstance(models_to_run, str):
+        models_to_run = [models_to_run]
+    else:
+        models_to_run = list(models_to_run)
+
+    invalid_models = [model for model in models_to_run if model not in valid_models]
+    if invalid_models:
+        raise ValueError(
+            f"Modelli non riconosciuti: {invalid_models}. "
+            f"Valori ammessi: {valid_models}"
+        )
+
     # --- 2. GLOBAL TUNING (se richiesto) ---
     if do_tuning:
         print(f"\n--- 2. Global Tuning attivo ({tuning_iter} iterazioni su {tuning_sample_size} campioni) ---")
@@ -72,7 +90,7 @@ def run_training_pipeline(
             stratify=y, random_state=RANDOM_STATE
         )
 
-        for name in ["RandomForest", "XGBoost", "LightGBM"]:
+        for name in [m for m in ["RandomForest", "XGBoost", "LightGBM"] if m in models_to_run]:
             print(f"  > Tuning {name} (Modello + Feature Selection)...")
             
             # Creiamo una pipeline temporanea con i parametri di default per il tuning
@@ -117,22 +135,35 @@ def run_training_pipeline(
     # Per semplicità, gli ensemble useranno i parametri di FS del modello con performance tipicamente migliore (LightGBM)
     ensemble_fs_params = model_configs["LightGBM"]["fs_params"] if do_tuning else {"threshold": fs_threshold, "max_features_to_hold": max_features_to_hold}
     
-    model_configs["VotingEnsemble"] = {
-        "model": get_voting_ensemble(
-            model_configs["RandomForest"]["model"],
-            model_configs["XGBoost"]["model"],
-            model_configs["LightGBM"]["model"]
-        ),
-        "fs_params": ensemble_fs_params
+    if "VotingEnsemble" in models_to_run:
+        model_configs["VotingEnsemble"] = {
+            "model": get_voting_ensemble(
+                model_configs["RandomForest"]["model"],
+                model_configs["XGBoost"]["model"],
+                model_configs["LightGBM"]["model"]
+            ),
+            "fs_params": ensemble_fs_params
+        }
+
+    if "StackingEnsemble" in models_to_run:
+        model_configs["StackingEnsemble"] = {
+            "model": get_stacking_ensemble(
+                model_configs["RandomForest"]["model"],
+                model_configs["XGBoost"]["model"],
+                model_configs["LightGBM"]["model"]
+            ),
+            "fs_params": ensemble_fs_params
+        }
+
+    # Tiene solo i modelli richiesti
+    model_configs = {
+        name: config
+        for name, config in model_configs.items()
+        if name in models_to_run
     }
-    model_configs["StackingEnsemble"] = {
-        "model": get_stacking_ensemble(
-            model_configs["RandomForest"]["model"],
-            model_configs["XGBoost"]["model"],
-            model_configs["LightGBM"]["model"]
-        ),
-        "fs_params": ensemble_fs_params
-    }
+
+    if not model_configs:
+        raise ValueError("Nessun modello valido selezionato.")
 
     print(f"\n--- 3. Evaluation (Strategy {split_strategy}) ---")
     results = []
@@ -225,6 +256,7 @@ def run_training_pipeline(
     print(comparison_df.to_string(index=False))
     
     return comparison_df
+
 
 if __name__ == "__main__":
     run_training_pipeline(
