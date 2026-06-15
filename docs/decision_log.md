@@ -884,3 +884,20 @@ Prossimi step:
 - pushare il branch `gianluca` solo dopo documentazione coerente;
 - aprire PR verso `dev`;
 - preparare materiale per report e presentazione finale.
+
+## Decisione finale dopo submission pubblica
+
+Dopo la generazione della submission finale sono stati testati i due candidati più competitivi:
+
+| Modello | Configurazione | Public score |
+|---|---|---:|
+| XGBoost | no FS, no PCA, no tuning | 0.7397 |
+| StackingEnsemble | no FS, no PCA, no tuning | 0.7384 |
+
+La scelta finale rimane `XGBoost`, perché:
+- ottiene il miglior risultato nella validazione interna;
+- ottiene il miglior public score tra i candidati testati;
+- è più semplice da difendere e spiegare rispetto allo stacking.
+
+Feature selection, tuning e PCA restano documentati come esperimenti svolti, ma non vengono adottati nella configurazione finale perché peggiorano i risultati validati.
+

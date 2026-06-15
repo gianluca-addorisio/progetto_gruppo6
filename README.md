@@ -739,3 +739,29 @@ Stato aggiornato:
 - Nicola
 - Mattia
 - Claudia
+
+## Submission finale
+
+La submission finale è stata generata usando la configurazione candidata:
+
+- modello: `XGBoost`;
+- feature selection: non usata;
+- PCA: non usata;
+- tuning: non usato;
+- training finale: su tutto il training set disponibile.
+
+Il file prodotto è:
+
+```text
+outputs/submissions/final_submission.csv
+```
+
+Risultato della submission pubblica:
+
+```text
+XGBoost           public score = 0.7397
+StackingEnsemble  public score = 0.7384
+```
+
+La scelta finale rimane quindi `XGBoost`, coerentemente con la validazione interna e con il risultato pubblico.
+
