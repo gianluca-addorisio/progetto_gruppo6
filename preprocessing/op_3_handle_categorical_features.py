@@ -26,11 +26,11 @@ def run_handle_categorical_features(df: pd.DataFrame) -> HandleCategoricalFeatur
     ]
 
     # Print the new columns and a preview of their values
-    print("--- Newly Created Encoded Columns ---")
+    print("Newly Created Encoded Columns")
     encoded_cols = [col for col in df_encoded.columns if any(cat in col for cat in original_categorical_cols)]
     print(df_encoded[encoded_cols].head())
 
-    print("\n--- Summary of New Feature Count ---")
+    print("\nSummary of New Feature Count")
     print(f"Total columns before encoding: {df.shape[1]}")
     print(f"Total columns after encoding: {df_encoded.shape[1]}")
 

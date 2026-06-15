@@ -1,310 +1,182 @@
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.feature_selection import chi2
-from sklearn.feature_selection import mutual_info_classif
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.feature_selection import chi2, mutual_info_classif
+from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
-from skrebate import ReliefF
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Dense
-from tensorflow.keras.optimizers import Adam
-from xgboost import XGBClassifier
-from catboost import CatBoostClassifier
-from .utils import plot_feature_ranking, plot_correlation_heatmap
+from .utils import plot_feature_ranking
 
 class FeatureSelection:
+    """
+    Classe per l'analisi e la selezione delle feature.
+    I metodi sono stati ottimizzati per lavorare su dati già preprocessati (numerici).
+    """
 
-    def correlation_matrix(self, X: pd.DataFrame, y: pd.Series) -> pd.Series:
-
-        X_encoded = pd.get_dummies(X)
-        # Combine features + target
-        df = pd.concat([X_encoded, y], axis=1)
-        # Keep only numeric columns
+    def correlation_ranking(self, X: pd.DataFrame, y: pd.Series) -> pd.Series:
+        """Calcola la correlazione di ogni feature con il target."""
+        # Uniamo temporaneamente per calcolare la correlazione
+        df = pd.concat([X, y], axis=1)
         corr_matrix = df.corr()
-        # Correlation with target
-        plot_correlation_heatmap(corr_matrix, title="Correlation Heatmap between features")
-
-        corr_target = (
-            corr_matrix[y.name]
-            .sort_values(ascending=False)
-        )
-        # Remove target itself
-        ranking = corr_target.drop(y.name)
-        plot_feature_ranking(ranking, title="Correlation Matrix", save_path="plots/corr_matrix_ranking.png")
+        
+        # Correlazione con il target (valore assoluto per importanza)
+        ranking = corr_matrix[y.name].abs().sort_values(ascending=False)
+        ranking = ranking.drop(y.name) # Rimuoviamo il target stesso
+        
+        plot_feature_ranking(ranking, title="Correlation Ranking", save_path="plots/corr_ranking.png")
         return ranking
 
-
-    def high_correlation_features(
-            self,
-            X: pd.DataFrame,
-            threshold: float = 0.8,
-            save_path: str = "plots/high_correlation_features.csv"
-    ) -> pd.DataFrame:
-        """
-        Compute correlation matrix on X and save only feature pairs
-        with high absolute correlation.
-
-        Parameters
-        ----------
-        X : pd.DataFrame
-            Feature matrix.
-        threshold : float
-            Minimum absolute correlation value.
-        save_path : str
-            Path where the CSV will be saved.
-
-        Returns
-        -------
-        pd.DataFrame
-            DataFrame containing highly correlated feature pairs.
-        """
-
-        # One-hot encode categorical features
-        X_encoded = pd.get_dummies(X)
-
-        # Correlation matrix
-        corr_matrix = X_encoded.corr()
-
-        # Keep only upper triangle to avoid duplicates
-        upper_triangle = corr_matrix.where(
-            np.triu(np.ones(corr_matrix.shape), k=1).astype(bool)
-        )
-
-        # Extract highly correlated pairs
-        high_corr_pairs = (
-            upper_triangle.stack()
-            .reset_index()
-        )
-
+    def get_high_correlation_pairs(self, X: pd.DataFrame, threshold: float = 0.8) -> pd.DataFrame:
+        """Identifica coppie di feature altamente correlate tra loro."""
+        corr_matrix = X.corr()
+        upper_triangle = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
+        
+        high_corr_pairs = upper_triangle.stack().reset_index()
         high_corr_pairs.columns = ["feature_1", "feature_2", "correlation"]
+        
+        high_corr_pairs = high_corr_pairs[high_corr_pairs["correlation"].abs() >= threshold]
+        return high_corr_pairs.sort_values(by="correlation", ascending=False)
 
-        # Filter by absolute correlation
-        high_corr_pairs = high_corr_pairs[
-            high_corr_pairs["correlation"].abs() >= threshold
-            ]
+    @staticmethod
+    def chi_square_scores(X: pd.DataFrame, y: pd.Series) -> pd.Series:
+        """Calcola i punteggi Chi-quadrato (solo per feature non negative)."""
+        # Assicuriamoci che non ci siano valori negativi (comune dopo lo scaling)
+        X_min = X.min().min()
+        X_adj = X - X_min if X_min < 0 else X
+        
+        chi_scores, p_values = chi2(X_adj, y)
+        scores = pd.Series(chi_scores, index=X.columns).sort_values(ascending=False)
+        
+        plot_feature_ranking(scores, title="Chi-2 Scores", save_path="plots/chi2_ranking.png")
+        return scores
 
-        # Sort by absolute correlation descending
-        high_corr_pairs = high_corr_pairs.reindex(
-            high_corr_pairs["correlation"].abs().sort_values(ascending=False).index
+    @staticmethod
+    def information_gain_scores(X: pd.DataFrame, y: pd.Series) -> pd.Series:
+        """Calcola la Mutual Information tra feature e target."""
+        mi = mutual_info_classif(X, y, random_state=42)
+        scores = pd.Series(mi, index=X.columns).sort_values(ascending=False)
+        
+        plot_feature_ranking(scores, title="Mutual Information Scores", save_path="plots/mi_ranking.png")
+        return scores
+
+    @staticmethod
+    def random_forest_importances(X: pd.DataFrame, y: pd.Series) -> pd.Series:
+        """Calcola l'importanza delle feature tramite Random Forest."""
+        rf = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+        rf.fit(X, y)
+        
+        scores = pd.Series(rf.feature_importances_, index=X.columns).sort_values(ascending=False)
+        plot_feature_ranking(scores, title="Random Forest Importance", save_path="plots/rf_importance.png")
+        return scores
+
+    @staticmethod
+    def xgboost_importances(X: pd.DataFrame, y: pd.Series) -> pd.Series:
+        """Calcola l'importanza delle feature tramite XGBoost."""
+        from sklearn.preprocessing import LabelEncoder
+        from xgboost import XGBClassifier
+        
+        model = XGBClassifier(n_estimators=100, random_state=42, eval_metric="logloss")
+        le = LabelEncoder()
+        y_encoded = le.fit_transform(y)
+        model.fit(X, y_encoded)
+        
+        scores = pd.Series(model.feature_importances_, index=X.columns).sort_values(ascending=False)
+        plot_feature_ranking(scores, title="XGBoost Importance", save_path="plots/xgb_importance.png")
+        return scores
+
+    @staticmethod
+    def catboost_importances(X: pd.DataFrame, y: pd.Series) -> pd.Series:
+        """Calcola l'importanza delle feature tramite CatBoost."""
+        from sklearn.preprocessing import LabelEncoder
+        from catboost import CatBoostClassifier
+
+        # In questo stadio X è già numerico, quindi non servono cat_features
+        model = CatBoostClassifier(iterations=100, random_state=42, verbose=0)
+        le = LabelEncoder()
+        y_encoded = le.fit_transform(y)
+        model.fit(X, y_encoded)
+        
+        scores = pd.Series(model.feature_importances_, index=X.columns).sort_values(ascending=False)
+        plot_feature_ranking(scores, title="CatBoost Importance", save_path="plots/catboost_importance.png")
+        return scores
+
+    def relief_importances(self, X: pd.DataFrame, y: pd.Series) -> pd.Series:
+        """Calcola l'importanza delle feature tramite l'algoritmo ReliefF."""
+        from skrebate import ReliefF
+        
+        relief = ReliefF(n_neighbors=100)
+        relief.fit(X.values, y.values)
+        
+        scores = pd.Series(relief.feature_importances_, index=X.columns).sort_values(ascending=False)
+        plot_feature_ranking(scores, title="ReliefF Ranking", save_path="plots/relief_ranking.png")
+        return scores
+
+    def pca_transformation(self, X: pd.DataFrame, n_components: int = 10) -> pd.DataFrame:
+        """Esegue la Feature Extraction tramite PCA."""
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+        
+        pca = PCA(n_components=n_components)
+        X_pca = pca.fit_transform(X_scaled)
+        
+        return pd.DataFrame(
+            X_pca, 
+            columns=[f"PCA_Comp_{i+1}" for i in range(n_components)],
+            index=X.index
         )
 
-        # Save to CSV
-        high_corr_pairs.to_csv(save_path, index=False)
+    def rfe_selection(self, X: pd.DataFrame, y: pd.Series, n_features_to_select: int = 30) -> pd.Series:
+        """Seleziona le feature tramite Recursive Feature Elimination (RFE)."""
+        from sklearn.feature_selection import RFE
+        from sklearn.ensemble import RandomForestClassifier
+        
+        estimator = RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=-1)
+        selector = RFE(estimator, n_features_to_select=n_features_to_select, step=5)
+        selector = selector.fit(X, y)
+        
+        # Creiamo un ranking invertito (1 è il migliore, quindi lo trasformiamo per coerenza con gli altri metodi)
+        ranking = pd.Series(1.0 / selector.ranking_, index=X.columns).sort_values(ascending=False)
+        return ranking
 
-        return high_corr_pairs
-
-        return corr_matrix
-
-    @staticmethod
-    def chi_square_selection(X: pd.DataFrame, y: pd.Series, p_value_threshold: float = 0.05):
-        # tengo solo colonne numeriche
-        #X_numeric = X.select_dtypes(include=np.number)
-        X_encoded = pd.get_dummies(X)
-        # applico test Chi-quadrato
-        chi_scores, p_values = chi2(X_encoded, y)
-
-        results = pd.DataFrame({
-            "Feature": X_encoded.columns,
-            "Chi2 Score": chi_scores,
-            "p-value": p_values,
-        })
-
-        print(results.sort_values("Chi2 Score", ascending=False))
-        results = results[results["p-value"] < p_value_threshold]
-
-        selected_features = results["Feature"]
-
-        final_df = X_encoded[selected_features].copy()
-        final_df[y.name] = y
-        plot_feature_ranking(results, title="Chi-2 Analysis", save_path="plots/chi2_ranking.png")
-
-        return final_df
+    def sfs_selection(self, X: pd.DataFrame, y: pd.Series, n_features_to_select: int = 15) -> pd.Series:
+        """Seleziona le feature tramite Sequential Feature Selection (SFS)."""
+        from sklearn.feature_selection import SequentialFeatureSelector
+        from sklearn.linear_model import LogisticRegression
+        
+        estimator = LogisticRegression(max_iter=500)
+        sfs = SequentialFeatureSelector(estimator, n_features_to_select=n_features_to_select, direction='forward', n_jobs=-1)
+        sfs.fit(X, y)
+        
+        # SFS restituisce una maschera booleana
+        scores = pd.Series(sfs.get_support().astype(float), index=X.columns).sort_values(ascending=False)
+        return scores
 
     @staticmethod
-    def information_gain_selection( X: pd.DataFrame, y: pd.Series, threshold: float = 0.02):
-        # include TUTTE le feature (numeriche + categoriche)
-        X_encoded = pd.get_dummies(X)
-        mi = mutual_info_classif(X_encoded, y, random_state=42)
-
-        scores = pd.Series(mi, index=X_encoded.columns)
-        plot_feature_ranking( scores, title="Mutual Information")
-
-        print(scores.sort_values(ascending=False))
-        selected = scores[scores > threshold].index
-
-        final_df = X_encoded[selected].copy()
-        final_df[y.name] = y.values
-
-        return final_df
-
-    #l'idea è di applicarela PCA su solo alcune feature
-    def PCA_selection(self, df: pd.DataFrame, target_col: str):
-        y = df[target_col]
-        X = df.drop(columns=[target_col])
-
-        X_numeric = X.select_dtypes(include=np.number)
-
+    def autoencoder_extraction(X: pd.DataFrame, encoding_dim: int = 16, epochs: int = 10):
+        """Esegue la Feature Extraction tramite Autoencoder."""
+        from tensorflow.keras.models import Model
+        from tensorflow.keras.layers import Input, Dense
+        from tensorflow.keras.optimizers import Adam
+        
         scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X_numeric)
-
-        pca = PCA()
-        X_pca_transformed = pca.fit_transform(X_scaled)
-
-        return pd.DataFrame(X_pca_transformed)
-
-    def Relief_selection(self, X: pd.DataFrame, y: pd.Series):
-        X_encoded = pd.get_dummies(X)
-
-        X_encoded = X_encoded.astype(np.float64)
-
-        relief = ReliefF(n_neighbors=100)
-        relief.fit(X_encoded.values, y)
-
-        scores = pd.Series(relief.feature_importances_, index=X.columns)
-        ranking = scores.sort_values(ascending=False)
-
-        print(ranking)
-        plot_feature_ranking( ranking, title="ReliefF Ranking")
-        top_features = ranking.head(5).index
-        X_selected = X[top_features]
-        print(X_selected.head())
-        return X_selected
-
-    @staticmethod
-    def random_forest_selection(X: pd.DataFrame, y: pd.Series, threshold: float = 0.01):
-        # encoding categoriche
-        X_encoded = pd.get_dummies(X, drop_first=False)
-
-        # modello Random Forest
-        rf = RandomForestClassifier( n_estimators=100, random_state=42, n_jobs=-1)
-        rf.fit(X_encoded, y)
-
-        # importance scores
-        scores = pd.Series( rf.feature_importances_, index=X_encoded.columns)
-
-        ranking = scores.sort_values(ascending=False)
-
-        print(ranking)
-        plot_feature_ranking(ranking, title="Random Forest Importance")
-        # selezione feature importanti
-        selected_features = ranking[ranking > threshold].index
-        # dataset finale
-        final_df = X_encoded[selected_features].copy()
-        final_df[y.name] = y.values
-        return final_df
-
-    @staticmethod
-    def autoencoder_selection(
-            X: pd.DataFrame,
-            encoding_dim: int = 16,
-            epochs: int = 6,
-            batch_size: int = 32,
-    ):
-        # encoding categoriche
-        X_encoded = pd.get_dummies(X)
-
-        # scaling
-        scaler = StandardScaler()
-
-        X_scaled = scaler.fit_transform(X_encoded)
-
+        X_scaled = scaler.fit_transform(X)
         input_dim = X_scaled.shape[1]
 
-        # ----- AUTOENCODER -----
-
         input_layer = Input(shape=(input_dim,))
-
-        # encoder
         encoded = Dense(64, activation="relu")(input_layer)
         encoded = Dense(encoding_dim, activation="relu")(encoded)
-
-        # decoder
         decoded = Dense(64, activation="relu")(encoded)
         decoded = Dense(input_dim, activation="sigmoid")(decoded)
 
         autoencoder = Model(input_layer, decoded)
-
         encoder = Model(input_layer, encoded)
 
-        autoencoder.compile(
-            optimizer=Adam(),
-            loss="mse",
-        )
+        autoencoder.compile(optimizer=Adam(), loss="mse")
+        autoencoder.fit(X_scaled, X_scaled, epochs=epochs, batch_size=32, verbose=0)
 
-        autoencoder.fit(
-            X_scaled,
-            X_scaled,
-            epochs=epochs,
-            batch_size=batch_size,
-            shuffle=True,
-            verbose=1,
-        )
-
-        # feature extraction
         X_latent = encoder.predict(X_scaled)
-
-        latent_df = pd.DataFrame(
-            X_latent,
-            columns=[
-                f"AE_Feature_{i}"
-                for i in range(encoding_dim)
-            ]
+        return pd.DataFrame(
+            X_latent, 
+            columns=[f"AE_Feature_{i+1}" for i in range(encoding_dim)],
+            index=X.index
         )
-
-        return latent_df
-
-    @staticmethod
-    def xgboost_selection(X: pd.DataFrame, y: pd.Series, threshold: float = 0.01):
-        # encoding categoriche
-        X_encoded = pd.get_dummies(X)
-
-        # modello XGBoost
-        model = XGBClassifier(n_estimators=100, random_state=42, eval_metric="logloss")
-        encoder = LabelEncoder()
-        y_encoded = encoder.fit_transform(y)
-        model.fit(X_encoded, y_encoded)
-
-        # importance
-        scores = pd.Series( model.feature_importances_, index=X_encoded.columns)
-
-        ranking = scores.sort_values( ascending=False)
-        plot_feature_ranking( ranking, title="XGBoost Importance")
-        print(ranking)
-
-        # selezione feature
-        selected_features = ranking[ranking > threshold].index
-
-        final_df = X_encoded[selected_features].copy()
-        final_df[y.name] = y.values
-        return final_df
-
-    @staticmethod
-    def catboost_selection( X: pd.DataFrame, y: pd.Series, threshold: float = 0.01):
-        # individua colonne categoriche
-        categorical_cols = X.select_dtypes( include=["object", "category"]).columns.tolist()
-
-        # indici colonne categoriche
-        cat_indices = [
-            X.columns.get_loc(col)
-            for col in categorical_cols
-        ]
-
-        # modello CatBoost
-        model = CatBoostClassifier( iterations=100, random_state=42, verbose=0,)
-        encoder = LabelEncoder()
-        y_encoded = encoder.fit_transform(y)
-        model.fit( X, y_encoded, cat_features=cat_indices)
-
-        # importance
-        scores = pd.Series( model.feature_importances_, index=X.columns)
-
-        ranking = scores.sort_values(ascending=False)
-        plot_feature_ranking( ranking, title="CatBoost Importance")
-        print(ranking)
-
-        # selezione feature
-        selected_features = ranking[ ranking > threshold].index
-        final_df = X[ selected_features].copy()
-        final_df[y.name] = y.values
-        return final_df
+    

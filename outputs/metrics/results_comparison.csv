@@ -1,0 +1,6 @@
+model,micro_f1,macro_f1,weighted_f1
+RandomForest,0.716160,0.645689,0.704259
+XGBoost,0.741889,0.687747,0.735980
+LightGBM,0.727615,0.664767,0.719590
+VotingEnsemble,0.735462,0.673930,0.727158
+StackingEnsemble,0.741851,0.688311,0.736433
