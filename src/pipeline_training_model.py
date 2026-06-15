@@ -174,7 +174,13 @@ def run_training_pipeline(
         print(f"Train size: {X_train.shape}, Validation size: {X_val.shape}")
         
         for name, config in model_configs.items():
-            print(f"  [Model: {name}] Training con FS dedicata...")
+            fs_label = (
+                f"con FS dedicata ({fs_method}, max {config['fs_params']['max_features_to_hold']} feat)"
+                if feature_selection
+                else "senza feature selection"
+            )
+            pca_label = f" + PCA({pca_n_components})" if use_pca else ""
+            print(f"  [Model: {name}] Training {fs_label}{pca_label}...")
             
             # Applichiamo la FS specifica del modello
             fs_p = config["fs_params"]
@@ -200,14 +206,26 @@ def run_training_pipeline(
             y_pred = pipeline.predict(X_val)
             metrics = evaluate_predictions(y_val, y_pred, name)
             results.append(metrics)
-            print(f"    Micro-F1: {metrics['micro_f1']:.4f} | FS: {fs_p['max_features_to_hold']} feat")
+            fs_result = (
+                f" | FS: {fs_p['max_features_to_hold']} feat"
+                if feature_selection
+                else " | FS: non usata"
+            )
+            pca_result = f" | PCA: {pca_n_components} comp." if use_pca else " | PCA: non usata"
+            print(f"    Micro-F1: {metrics['micro_f1']:.4f}{fs_result}{pca_result}")
 
     else:
         # --- CROSS-VALIDATION FLOW ---
         splits = data_loader.split_dataset_by_strategy(split_strategy, X, y)
         
         for name, config in model_configs.items():
-            print(f"  [Model: {name}] CV Evaluation con FS dedicata...")
+            fs_label = (
+                f"con FS dedicata ({fs_method}, max {config['fs_params']['max_features_to_hold']} feat)"
+                if feature_selection
+                else "senza feature selection"
+            )
+            pca_label = f" + PCA({pca_n_components})" if use_pca else ""
+            print(f"  [Model: {name}] CV Evaluation {fs_label}{pca_label}...")
             fold_results = []
             fs_p = config["fs_params"]
             
@@ -249,7 +267,13 @@ def run_training_pipeline(
                 "weighted_f1": np.mean([r["weighted_f1"] for r in fold_results]),
             }
             results.append(avg_metrics)
-            print(f"    Avg Micro-F1: {avg_metrics['micro_f1']:.4f} | FS: {fs_p['max_features_to_hold']} feat")
+            fs_result = (
+                f" | FS: {fs_p['max_features_to_hold']} feat"
+                if feature_selection
+                else " | FS: non usata"
+            )
+            pca_result = f" | PCA: {pca_n_components} comp." if use_pca else " | PCA: non usata"
+            print(f"    Avg Micro-F1: {avg_metrics['micro_f1']:.4f}{fs_result}{pca_result}")
 
     comparison_df = pd.DataFrame(results)
     print("\n--- 4. Final Comparison ---")
