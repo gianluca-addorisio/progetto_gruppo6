@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from sklearn.base import clone
@@ -14,7 +16,7 @@ from .models import (
     get_stacking_ensemble, get_voting_ensemble
 )
 from .featureselector import FeatureSelector
-from .config import RANDOM_STATE
+from .config import RANDOM_STATE, TARGET_COL
 from .hyperparameter_tuning import ModelTuner
 from .hyperparameter_tuning_feature_selection import FeatureSelectionTuner
 
@@ -280,6 +282,92 @@ def run_training_pipeline(
     print(comparison_df.to_string(index=False))
     
     return comparison_df
+
+
+def _get_model_by_name(model_name: str):
+    """Restituisce il modello richiesto per la pipeline finale."""
+    models = {
+        "RandomForest": get_random_forest_model,
+        "XGBoost": get_xgboost_model,
+        "LightGBM": get_lightgbm_model,
+        "VotingEnsemble": get_voting_ensemble,
+        "StackingEnsemble": get_stacking_ensemble,
+    }
+
+    if model_name not in models:
+        raise ValueError(
+            f"Modello non riconosciuto: {model_name}. "
+            f"Valori ammessi: {list(models)}"
+        )
+
+    return models[model_name]()
+
+
+def generate_final_submission(
+    model_name: str = "XGBoost",
+    output_path: str | Path = "outputs/submissions/final_submission.csv",
+    feature_selection: bool = False,
+    fs_method: str = "rf",
+    fs_threshold: float = 0.005,
+    max_features_to_hold: int = 30,
+    use_pca: bool = False,
+    pca_n_components: int = 40,
+):
+    """
+    Addestra il modello finale su tutto il training set e genera il file di submission.
+
+    Configurazione finale consigliata:
+    XGBoost senza feature selection, senza PCA e senza tuning.
+    """
+    print("--- Generazione submission finale ---")
+
+    data_loader = DataLoader()
+    X, y = data_loader.load_train_test()
+
+    # Le classi originali sono 1, 2, 3. I modelli vengono addestrati su 0, 1, 2.
+    y = y - 1
+
+    model = _get_model_by_name(model_name)
+
+    fs = (
+        FeatureSelector(
+            fs_method=fs_method,
+            threshold=fs_threshold,
+            max_features_to_hold=max_features_to_hold,
+        )
+        if feature_selection
+        else None
+    )
+
+    pipeline = make_complete_pipeline(
+        model,
+        feature_selector=fs,
+        use_pca=use_pca,
+        pca_n_components=pca_n_components,
+    )
+
+    print(f"Training finale modello: {model_name}")
+    print(f"Feature selection: {'attiva' if feature_selection else 'non usata'}")
+    print(f"PCA: {'attiva' if use_pca else 'non usata'}")
+
+    pipeline.fit(X, y)
+
+    test_values = data_loader.test_values_df.copy()
+    submission = data_loader.submission_format_df.copy()
+
+    predictions = pipeline.predict(test_values)
+
+    # Rimappatura da 0, 1, 2 alle classi richieste dalla competizione: 1, 2, 3.
+    submission[TARGET_COL] = predictions + 1
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    submission.to_csv(output_path, index=False)
+
+    print(f"Submission salvata in: {output_path}")
+    print(submission[TARGET_COL].value_counts().sort_index())
+
+    return submission
 
 
 if __name__ == "__main__":
