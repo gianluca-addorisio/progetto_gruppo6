@@ -85,9 +85,24 @@ def run_training_pipeline(
             )
             
             param_grid = tuner.get_param_grid(name)
-            best_pipeline, best_params, _ = fs_tuner.tune_pipeline(
-                temp_pipeline, name, param_grid, X_tune, y_tune, n_iter=tuning_iter
-            )
+
+            if feature_selection:
+                best_pipeline, best_params, best_score = fs_tuner.tune_pipeline(
+                    temp_pipeline,
+                    name,
+                    param_grid,
+                    X_tune,
+                    y_tune,
+                    n_iter=tuning_iter,
+                )
+            else:
+                best_pipeline, best_params, best_score = tuner.tune_pipeline(
+                    temp_pipeline,
+                    name,
+                    X_tune,
+                    y_tune,
+                    n_iter=tuning_iter,
+                )
             
             # SALVATAGGIO CONFIGURAZIONE SPECIFICA
             model_configs[name]["model"] = best_pipeline.named_steps['model']

@@ -93,3 +93,27 @@ class ModelTuner:
                 "model__final_estimator__solver": ['lbfgs', 'liblinear']
             }
         return {}
+
+    def tune_pipeline(self, pipeline, model_name, X, y, n_iter=20):
+        """
+        Ottimizza una pipeline sklearn agendo solo sui parametri del modello.
+
+        Questo metodo va usato quando la pipeline non contiene uno step
+        di feature selection. I parametri devono quindi avere prefisso
+        'model__'.
+        """
+        param_grid = self.get_param_grid(model_name)
+
+        search = RandomizedSearchCV(
+            estimator=pipeline,
+            param_distributions=param_grid,
+            n_iter=n_iter,
+            scoring="f1_micro",
+            cv=self.cv,
+            verbose=1,
+            random_state=self.random_state,
+            n_jobs=-1,
+        )
+
+        search.fit(X, y)
+        return search.best_estimator_, search.best_params_, search.best_score_
