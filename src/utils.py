@@ -36,6 +36,8 @@ def load_model(path: str | Path):
     """Load a model saved with joblib."""
     return joblib.load(path)
 
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -56,7 +58,7 @@ def plot_feature_ranking(
     scores = scores.sort_values(ascending=False)
 
     # figura
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(20, 12))
 
     plt.barh(scores.index, scores.values)
 
@@ -86,7 +88,7 @@ def plot_correlation_heatmap(
 
     corr = df.corr(numeric_only=True)
 
-    plt.figure(figsize=(12, 8))
+    plt.figure(figsize=(24, 16))
 
     sns.heatmap(
         corr,
