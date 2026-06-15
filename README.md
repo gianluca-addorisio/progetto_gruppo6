@@ -31,10 +31,12 @@ Metriche di supporto:
 - macro-F1
 - weighted-F1
 
-Per l'analisi qualitativa degli errori potranno essere usati anche:
+Per l'analisi qualitativa degli errori possono essere usati anche:
 
 - classification report
 - confusion matrix
+
+La scelta del modello finale viene guidata principalmente dalla micro-F1, coerentemente con la metrica della competizione.
 
 ---
 
@@ -81,7 +83,7 @@ La pipeline ufficiale lavora a partire dai dati raw. Le cartelle `data/interim/`
 ├── models/               # eventuali modelli salvati
 ├── notebooks/            # notebook di analisi e modellazione
 ├── outputs/              # metriche, figure e submission
-├── preprocessing/        # lavoro parallelo/sperimentale
+├── preprocessing/        # lavoro parallelo/sperimentale o legacy
 ├── src/                  # codice stabile e riutilizzabile
 ├── requirements.txt
 ├── README.md
@@ -94,7 +96,7 @@ La pipeline ufficiale usata per la modellazione si trova in:
 src/preprocessing/
 ```
 
-La cartella `preprocessing/` nella root contiene lavoro parallelo/sperimentale e non rappresenta la pipeline finale ufficiale.
+La cartella `preprocessing/` nella root contiene lavoro parallelo/sperimentale o legacy e non rappresenta la pipeline finale ufficiale.
 
 Il file `src/preprocessing.py` resta presente come componente legacy/backward-compatible, ma la source of truth attuale è il package modulare `src/preprocessing/`.
 
@@ -112,6 +114,8 @@ src/
 ├── features.py
 ├── feature_selection.py
 ├── featureselector.py
+├── hyperparameter_tuning.py
+├── hyperparameter_tuning_feature_selection.py
 ├── models.py
 ├── pipeline_training_model.py
 ├── preprocessing.py              # legacy/backward-compatible
@@ -133,8 +137,10 @@ Ruolo dei file principali:
 - `src/preprocessing/`: preprocessing modulare ufficiale;
 - `src/featureselector.py`: transformer sklearn-compatible per feature selection opzionale;
 - `src/feature_selection.py`: metodi di scoring/ranking delle feature;
-- `src/models.py`: definizione dei modelli;
+- `src/models.py`: definizione dei modelli e degli ensemble;
 - `src/pipeline_training_model.py`: training pipeline principale;
+- `src/hyperparameter_tuning.py`: tuning dei modelli senza feature selection;
+- `src/hyperparameter_tuning_feature_selection.py`: tuning con feature selection;
 - `src/evaluation.py`: metriche e valutazione;
 - `src/utils.py`: utility.
 
@@ -188,6 +194,8 @@ geo_level_2_id
 geo_level_3_id
 count_floors_pre_eq
 age
+area_percentage
+height_percentage
 land_surface_condition
 foundation_type
 roof_type
@@ -199,10 +207,9 @@ total_superstructure_count
 total_secondary_use_count
 has_fragile_material
 has_engineered_structure
-building_volume_proxy
 ```
 
-La pipeline modulare aggiornata crea inoltre:
+La pipeline modulare crea inoltre:
 
 ```text
 is_historic
@@ -217,7 +224,6 @@ is_historic
 La pipeline crea e mantiene le seguenti feature aggregate:
 
 ```text
-building_volume_proxy
 total_superstructure_count
 total_secondary_use_count
 has_fragile_material
@@ -227,7 +233,8 @@ is_historic
 
 Decisioni principali:
 
-- `building_volume_proxy` sostituisce `area_percentage` e `height_percentage`;
+- `area_percentage` e `height_percentage` vengono mantenute come feature dimensionali originali;
+- `building_volume_proxy` non viene mantenuta nella pipeline finale attuale perché ridondante rispetto ad `area_percentage` e `height_percentage`;
 - `total_secondary_use_count` sostituisce le feature originali `has_secondary_use_*`;
 - `total_superstructure_count`, `has_fragile_material` e `has_engineered_structure` sintetizzano le feature originali `has_superstructure_*`;
 - `age` viene mantenuta, ma il valore speciale `age = 995` viene gestito da `AgeHandler`;
@@ -244,8 +251,7 @@ Sono escluse dalla feature matrix finale:
 ```text
 building_id
 damage_grade
-area_percentage
-height_percentage
+building_volume_proxy
 age_clipped
 age_group
 family_count_group
@@ -261,7 +267,7 @@ Motivazione sintetica:
 
 - `building_id` è un identificativo tecnico;
 - `damage_grade` è il target;
-- `area_percentage` e `height_percentage` sono sostituite da `building_volume_proxy`;
+- `building_volume_proxy` è ridondante rispetto ad `area_percentage` e `height_percentage`;
 - le feature derivate da `age`, `count_families` e `count_floors_pre_eq` non hanno mostrato vantaggio sufficiente rispetto alle variabili grezze;
 - `plan_configuration` e `legal_ownership_status` sono state rimosse per bassa informatività e distribuzione fortemente sbilanciata;
 - le feature originali di uso secondario e superstruttura sono state compresse in aggregati interpretabili.
@@ -292,6 +298,39 @@ Il frequency encoding viene fittato solo sul training set, per evitare leakage t
 
 ---
 
+## Model comparison e risultati principali
+
+La configurazione candidata finale usa:
+
+```text
+Modello: XGBoost
+Feature selection: no
+PCA: no
+Tuning: no
+Sample weighting: no
+Feature dimensionali: original_dims
+Split strategy: 2
+```
+
+Risultati della baseline avanzata senza feature selection, senza PCA e senza tuning:
+
+```text
+RandomForest      micro-F1 0.716160 | macro-F1 0.645689 | weighted-F1 0.704259
+XGBoost           micro-F1 0.741889 | macro-F1 0.687747 | weighted-F1 0.735980
+LightGBM          micro-F1 0.727615 | macro-F1 0.664767 | weighted-F1 0.719590
+VotingEnsemble    micro-F1 0.735462 | macro-F1 0.673930 | weighted-F1 0.727158
+StackingEnsemble  micro-F1 0.741851 | macro-F1 0.688311 | weighted-F1 0.736433
+```
+
+Decisione:
+
+- `XGBoost` è il candidato finale attuale perché ottiene la micro-F1 più alta;
+- `StackingEnsemble` è quasi equivalente e ottiene macro-F1 e weighted-F1 leggermente migliori, ma è più complesso;
+- poiché la metrica principale è micro-F1, `XGBoost` è più difendibile come modello finale;
+- la scelta resta modificabile solo se ulteriori test mostrano un miglioramento chiaro e stabile.
+
+---
+
 ## Feature Selection
 
 La feature selection è integrata come step opzionale tramite:
@@ -318,33 +357,24 @@ Metodi supportati:
 - `mu`: mutual information;
 - `rlf`: ReliefF.
 
-I metodi basati su XGBoost, CatBoost, ReliefF o TensorFlow sono da considerare opzionali/pesanti e dipendono dalla configurazione dell'ambiente.
+I metodi basati su XGBoost, CatBoost o ReliefF sono da considerare opzionali/pesanti e dipendono dalla configurazione dell'ambiente.
 
-Risultati osservati con RandomForest:
+Risultati osservati con Feature Selection RF a 30 feature, senza PCA e senza tuning:
 
 ```text
-Senza feature selection:
-micro-F1    ≈ 0.6921
-macro-F1    ≈ 0.6107
-weighted-F1 ≈ 0.6722
-
-Feature Selection RF, 30 feature:
-micro-F1    ≈ 0.6859
-macro-F1    ≈ 0.6020
-weighted-F1 ≈ 0.6623
-
-Feature Selection RF, 50 feature:
-micro-F1    ≈ 0.6944
-macro-F1    ≈ 0.6161
-weighted-F1 ≈ 0.6764
+RandomForest      micro-F1 0.713858
+XGBoost           micro-F1 0.738109
+LightGBM          micro-F1 0.721859
+VotingEnsemble    micro-F1 0.731529
+StackingEnsemble  micro-F1 0.737380
 ```
 
 Conclusione:
 
 - la feature selection funziona ed è leak-safe se usata dentro la pipeline;
 - 30 feature risultano troppo aggressive;
-- 50 feature migliorano leggermente la baseline;
-- al momento la feature selection non supera la configurazione PCA 40.
+- la configurazione testata peggiora rispetto alla baseline avanzata senza feature selection;
+- la feature selection resta disponibile come strumento opzionale, ma non viene adottata nella pipeline finale attuale.
 
 ---
 
@@ -363,35 +393,21 @@ preprocessing
 
 La PCA non viene applicata sui dati grezzi.
 
-Risultati osservati con RandomForest:
+Risultati osservati con PCA a 40 componenti, senza feature selection e senza tuning:
 
 ```text
-Baseline RF:
-micro-F1    ≈ 0.6921
-macro-F1    ≈ 0.6107
-weighted-F1 ≈ 0.6722
-
-RF + scaling only:
-micro-F1    ≈ 0.6921
-macro-F1    ≈ 0.6106
-weighted-F1 ≈ 0.6722
-
-RF + PCA 40:
-micro-F1    ≈ 0.6983
-macro-F1    ≈ 0.6223
-weighted-F1 ≈ 0.6866
-
-RF + FS 50 + PCA 40:
-micro-F1    ≈ 0.6975
-macro-F1    ≈ 0.6204
-weighted-F1 ≈ 0.6856
+RandomForest      micro-F1 0.707949
+XGBoost           micro-F1 0.706049
+LightGBM          micro-F1 0.700620
+VotingEnsemble    micro-F1 0.710194
+StackingEnsemble  micro-F1 0.709944
 ```
 
 Conclusione:
 
-- il miglioramento non dipende dal solo scaling;
-- PCA con 40 componenti è la migliore configurazione osservata finora con RandomForest;
-- FS 50 + PCA 40 funziona, ma non supera PCA 40 senza feature selection.
+- PCA 40 peggiora sensibilmente rispetto alla baseline avanzata senza PCA;
+- la PCA non viene adottata nella configurazione finale attuale;
+- viene mantenuta come esperimento secondario utile per collegare il progetto agli argomenti del corso, ma non come scelta prestazionale.
 
 ---
 
@@ -404,24 +420,10 @@ Decisione:
 - non usarlo come default;
 - mantenerlo come esperimento alternativo orientato alla macro-F1.
 
-Risultati osservati con RandomForest:
+Motivazione:
 
-```text
-Senza sample_weight:
-micro-F1    ≈ 0.6921
-macro-F1    ≈ 0.6107
-weighted-F1 ≈ 0.6722
-
-Con sample_weight bilanciato:
-micro-F1    ≈ 0.6478
-macro-F1    ≈ 0.6280
-weighted-F1 ≈ 0.6509
-```
-
-Conclusione:
-
-- i pesi bilanciati migliorano la macro-F1;
-- peggiorano sensibilmente la micro-F1;
+- i pesi bilanciati possono aiutare le classi meno frequenti;
+- tuttavia possono penalizzare la micro-F1;
 - poiché la metrica principale è micro-F1, non sono usati come default.
 
 ---
@@ -432,16 +434,22 @@ La pipeline supporta:
 
 - RandomForest;
 - XGBoost;
-- LightGBM.
+- LightGBM;
+- VotingEnsemble;
+- StackingEnsemble.
 
-RandomForest è il modello baseline stabile.
+Decisione:
 
-XGBoost e LightGBM sono gestiti come modelli opzionali: se le dipendenze native non sono disponibili, vengono saltati senza bloccare l'intera pipeline.
+- RandomForest resta una baseline stabile e interpretabile;
+- XGBoost è il candidato finale attuale;
+- LightGBM è competitivo ma inferiore a XGBoost nella configurazione corrente;
+- VotingEnsemble e StackingEnsemble sono utili come confronto, ma non vengono preferiti automaticamente;
+- `models_to_run` permette di eseguire solo un sottoinsieme di modelli, rendendo più rapidi i test mirati.
 
 Nota per macOS:
 
 - XGBoost e LightGBM possono richiedere `libomp`;
-- se necessario, installare tramite Homebrew:
+- su Mac ARM può essere necessario installare `libomp` tramite Homebrew:
 
 ```bash
 brew install libomp
@@ -451,25 +459,80 @@ brew install libomp
 
 ## Tuning
 
-Il tuning è previsto come step successivo.
+Il tuning è stato integrato e testato in più configurazioni.
 
-Decisione metodologica:
+La pipeline distingue correttamente due casi:
 
-- il tuning deve essere eseguito sopra la pipeline modulare aggiornata;
-- non deve fare preprocessing, feature selection o PCA sull'intero dataset prima dello split;
-- lo scoring principale dovrebbe essere coerente con la metrica primaria, quindi micro-F1;
-- macro-F1 può restare metrica secondaria o obiettivo alternativo dichiarato.
+- se `feature_selection=True`, il tuning usa `FeatureSelectionTuner`;
+- se `feature_selection=False`, il tuning usa `ModelTuner` e ottimizza solo parametri del modello con prefisso `model__`.
 
-Sequenza corretta:
+Questa distinzione è necessaria perché, quando la feature selection è disattivata, la pipeline non contiene lo step `feature_selector`.
+
+### Tuning + feature selection RF
+
+Configurazione:
 
 ```text
-split/CV
-→ fit preprocessing solo su train/fold
-→ eventuale FeatureSelector
-→ eventuale PCA
-→ model
-→ metriche
+feature_selection = True
+fs_method = "rf"
+tuning_iter = 3
+tuning_sample_size = 10000
+max_features_to_hold = 30
 ```
+
+Risultati:
+
+```text
+RandomForest      micro-F1 0.700313
+XGBoost           micro-F1 0.709119
+LightGBM          micro-F1 0.673721
+VotingEnsemble    micro-F1 0.675735
+StackingEnsemble  micro-F1 0.685616
+```
+
+### Tuning senza feature selection
+
+Configurazione:
+
+```text
+feature_selection = False
+tuning_iter = 3
+tuning_sample_size = 10000
+```
+
+Risultati:
+
+```text
+RandomForest      micro-F1 0.723950
+XGBoost           micro-F1 0.719748
+LightGBM          micro-F1 0.677807
+VotingEnsemble    micro-F1 0.718156
+StackingEnsemble  micro-F1 0.730473
+```
+
+### Tuning solo XGBoost
+
+Configurazione:
+
+```text
+feature_selection = False
+do_tuning = True
+tuning_iter = 10
+tuning_sample_size = 30000
+models_to_run = ["XGBoost"]
+```
+
+Risultato:
+
+```text
+XGBoost micro-F1 0.724813 | macro-F1 0.661019 | weighted-F1 0.716496
+```
+
+Conclusione:
+
+- il tuning funziona tecnicamente;
+- nessuna configurazione testata batte la baseline avanzata corrente;
+- la pipeline candidata finale non usa tuning.
 
 ---
 
@@ -493,26 +556,76 @@ Installazione dipendenze:
 pip install -r requirements.txt
 ```
 
-Esecuzione training pipeline baseline:
+Su macOS, se XGBoost o LightGBM danno errore legato a librerie native, installare:
 
 ```bash
-python3 -m src.pipeline_training_model
+brew install libomp
 ```
 
-Esecuzione con PCA 40:
+### Esecuzione candidato finale XGBoost
+
+```bash
+python3 - <<'PY'
+from src.pipeline_training_model import run_training_pipeline
+
+results = run_training_pipeline(
+    feature_selection=False,
+    split_strategy=2,
+    use_sample_weight=False,
+    fs_method="rf",
+    use_pca=False,
+    do_tuning=False,
+    models_to_run=["XGBoost"],
+)
+
+print(results)
+PY
+```
+
+Output atteso:
+
+```text
+XGBoost  micro-F1 ≈ 0.741889
+```
+
+### Esecuzione confronto modelli avanzati
+
+```bash
+python3 - <<'PY'
+from src.pipeline_training_model import run_training_pipeline
+
+results = run_training_pipeline(
+    feature_selection=False,
+    split_strategy=2,
+    use_sample_weight=False,
+    fs_method="rf",
+    use_pca=False,
+    do_tuning=False,
+)
+
+print(results)
+PY
+```
+
+### Esecuzione PCA 40 come esperimento secondario
 
 ```bash
 python3 - <<'PY'
 from src.pipeline_training_model import run_training_pipeline
 
 run_training_pipeline(
+    feature_selection=False,
+    split_strategy=2,
+    use_sample_weight=False,
+    fs_method="rf",
     use_pca=True,
     pca_n_components=40,
+    do_tuning=False,
 )
 PY
 ```
 
-Esecuzione con Feature Selection RF a 50 feature:
+### Esecuzione Feature Selection RF a 30 feature
 
 ```bash
 python3 - <<'PY'
@@ -520,26 +633,12 @@ from src.pipeline_training_model import run_training_pipeline
 
 run_training_pipeline(
     feature_selection=True,
+    split_strategy=2,
+    use_sample_weight=False,
     fs_method="rf",
-    fs_threshold=0.0,
-    max_features_to_hold=50,
-)
-PY
-```
-
-Esecuzione con Feature Selection RF 50 + PCA 40:
-
-```bash
-python3 - <<'PY'
-from src.pipeline_training_model import run_training_pipeline
-
-run_training_pipeline(
-    feature_selection=True,
-    fs_method="rf",
-    fs_threshold=0.0,
-    max_features_to_hold=50,
-    use_pca=True,
-    pca_n_components=40,
+    max_features_to_hold=30,
+    use_pca=False,
+    do_tuning=False,
 )
 PY
 ```
@@ -555,8 +654,10 @@ notebooks/
 ├── 01_analisi_dati.ipynb
 ├── 02_qualita_dati.ipynb
 ├── 03_feature_comprehension.ipynb
+├── 04_preprocessing_feature_engineering.ipynb
 ├── 05_baseline_modeling.ipynb
-└── 06_feature_analysis_selection.ipynb
+├── 06_model_comparison_feature_selection.ipynb
+└── 07_tuning_final_evaluation.ipynb
 ```
 
 Ruolo dei notebook:
@@ -564,8 +665,10 @@ Ruolo dei notebook:
 - `01_analisi_dati.ipynb`: analisi esplorativa iniziale;
 - `02_qualita_dati.ipynb`: qualità dati e sintesi data quality;
 - `03_feature_comprehension.ipynb`: comprensione semantica delle feature;
+- `04_preprocessing_feature_engineering.ipynb`: preprocessing e feature engineering;
 - `05_baseline_modeling.ipynb`: baseline preliminare;
-- `06_feature_analysis_selection.ipynb`: feature selection, test diagnostici e confronto strategie.
+- `06_model_comparison_feature_selection.ipynb`: confronto modelli, feature selection e PCA;
+- `07_tuning_final_evaluation.ipynb`: tuning e valutazione finale, se usato.
 
 I notebook servono come supporto analitico e narrativo. La logica stabile finale deve stare in `src/`.
 
@@ -587,10 +690,12 @@ docs/
 - feature engineering;
 - encoding geografico;
 - preprocessing finale;
+- model comparison;
 - feature selection;
 - PCA;
 - sample weighting;
 - tuning;
+- scelta candidata finale;
 - stato del progetto e prossimi step.
 
 Il README fornisce invece una panoramica sintetica del progetto e istruzioni operative.
@@ -607,23 +712,24 @@ Stato aggiornato:
 - encoding geografico ibrido implementato;
 - `AgeHandler` integrato per gestire `age = 995`;
 - `FeatureSelector` integrato come step opzionale e leak-safe;
-- PCA integrata come step opzionale;
-- configurazione RandomForest + PCA 40 identificata come miglior risultato osservato finora;
+- PCA integrata come step opzionale, ma non adottata nella pipeline finale;
 - `sample_weight` disponibile ma non usato come default;
-- XGBoost e LightGBM gestiti come modelli opzionali;
-- tuning ancora da riallineare alla pipeline aggiornata.
+- XGBoost è il candidato finale attuale;
+- StackingEnsemble è l'alternativa quasi equivalente;
+- tuning testato ma non adottato;
+- `models_to_run` permette test selettivi sui modelli;
+- la documentazione metodologica dettagliata è in `docs/decision_log.md`.
 
 ---
 
 ## Prossimi step
 
-- riallineare il tuning alla pipeline modulare aggiornata;
-- rieseguire model comparison finale su configurazioni comparabili;
-- valutare se usare PCA 40 nella configurazione finale;
-- salvare metriche finali in `outputs/metrics/`;
-- produrre eventuale final evaluation/submission;
-- aggiornare worklog condiviso;
-- comunicare al gruppo lo stato aggiornato della pipeline.
+- creare o aggiornare una tabella esperimenti unica e coerente in `outputs/metrics/`;
+- decidere se implementare `make_submission` come patch separata;
+- eseguire test finale minimo della pipeline;
+- pushare il branch consolidato;
+- aprire PR verso `dev`;
+- preparare materiale per report e presentazione finale.
 
 ---
 
