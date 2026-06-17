@@ -4,7 +4,7 @@ from sklearn.base import BaseEstimator, TransformerMixin
 class AgeHandler(BaseEstimator, TransformerMixin):
     """
     Gestisce la logica specifica per la colonna 'age', inclusa la creazione di flag per edifici storici.
-    Recuperato da: preprocessing/op_2_handle_outliers.py
+    Modulo della pipeline modulare di preprocessing.
     """
     def __init__(self, age_col='age'):
         self.age_col = age_col

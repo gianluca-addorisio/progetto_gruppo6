@@ -6,7 +6,7 @@ class NumericalScaler(BaseEstimator, TransformerMixin):
     """
     Normalizza le variabili numeriche in modo che abbiano media 0 e deviazione standard 1.
     
-    RECUPERATO DA: src/preprocessing.py e op_4_scale_numerical_features.py
+    Modulo della pipeline modulare di preprocessing.
     
     GIUSTIFICAZIONE:
     Molti modelli (come quelli lineari o basati su distanze) performano meglio se le 

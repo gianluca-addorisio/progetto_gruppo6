@@ -6,7 +6,7 @@ from sklearn.preprocessing import OneHotEncoder
 class FrequencyEncoder(BaseEstimator, TransformerMixin):
     """
     Frequency encoder for high-cardinality categorical identifiers.
-    Recuperato da: src/preprocessing.py
+    Modulo della pipeline modulare di preprocessing.
     
     Durante il fit, calcola la frequenza relativa di ogni categoria.
     Durante il transform, mappa le categorie alle loro frequenze. 

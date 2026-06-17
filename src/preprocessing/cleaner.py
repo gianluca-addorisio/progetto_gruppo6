@@ -5,7 +5,7 @@ class DataCleaner(BaseEstimator, TransformerMixin):
     """
     Esegue operazioni di pulizia e pruning (rimozione feature) sul dataset.
     
-    RECUPERATO DA: src/preprocessing.py (prepare_features)
+    Modulo della pipeline modulare di preprocessing.
     
     Operazioni:
     1. Rimozione di identificativi e target.
@@ -17,7 +17,7 @@ class DataCleaner(BaseEstimator, TransformerMixin):
     def __init__(self, additional_cols_to_drop=None):
         self.additional_cols_to_drop = additional_cols_to_drop
 
-        # Feature da rimuovere fisse (da src/preprocessing.py)
+        # Feature da rimuovere nella pipeline finale.
         self.final_drop_features = [
             'building_id', 
             'damage_grade',
