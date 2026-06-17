@@ -11,9 +11,11 @@ from .data_loader import DataLoader
 from .preprocessing.pipeline import make_complete_pipeline
 from .evaluation import evaluate_predictions
 from .models import (
-    get_random_forest_model, get_xgboost_model, get_lightgbm_model, 
-    get_dummy_classifier, get_decision_tree, get_logistic_regression,
-    get_stacking_ensemble, get_voting_ensemble
+    get_random_forest_model,
+    get_xgboost_model,
+    get_lightgbm_model,
+    get_stacking_ensemble,
+    get_voting_ensemble,
 )
 from .featureselector import FeatureSelector
 from .config import RANDOM_STATE, TARGET_COL
@@ -369,11 +371,14 @@ def generate_final_submission(
 
     return submission
 
-
 if __name__ == "__main__":
-    run_training_pipeline(
-        do_tuning=True, 
-        tuning_iter=15, 
-        tuning_sample_size=50000,
-        split_strategy=4
+    results = run_training_pipeline(
+        feature_selection=False,
+        split_strategy=2,
+        use_sample_weight=False,
+        use_pca=False,
+        do_tuning=False,
+        models_to_run=["XGBoost"],
     )
+
+    print(results)

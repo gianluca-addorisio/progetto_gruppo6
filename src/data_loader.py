@@ -79,7 +79,7 @@ class DataLoader:
             self.submission_format_df,
         ) = load_raw_data()
 
-        self.train_df = load_full_train(self.train_values_df,self.train_labels_df)
+        self.train_df = load_full_train(self.train_values_df, self.train_labels_df)
 
     def load_train_test(self):
         """
@@ -111,9 +111,6 @@ class DataLoader:
             5: Shuffle Split
             6: Stratified Shuffle Split
         """
-        #X = self.train_values_df
-        #y = self.train_labels_df[TARGET_COL]
-
         # Holdout split
         if choice == 1:
             return train_test_split(

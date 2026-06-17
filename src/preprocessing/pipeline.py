@@ -1,17 +1,14 @@
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer
 
-# Importiamo i nostri moduli personalizzati
 from .cleaner import DataCleaner
 from .age_handler import AgeHandler
 
-# from .outliers import OutlierCapper Rimossa perchè
 from .encoding import CategoricalEncoder, FrequencyEncoder
 from .scaling import NumericalScaler
 from sklearn.decomposition import PCA
 from ..featureselector import FeatureSelector
 
-# Importiamo la funzione per il feature engineering esistente
 from ..features import add_engineered_features
 
 
@@ -31,7 +28,7 @@ def get_preprocessing_steps(scale_numeric=False):
         ('feature_engineering', FunctionTransformer(add_engineered_features)),
         ('cleaner', DataCleaner()),
         ('age_handler', AgeHandler()),
-        # OutlierCapper è stato rimosso nella pipeline standard perchè le colonne su cui agisce vengono già rimosse dal DataCleaner.
+        # OutlierCapper non è incluso nella pipeline standard: le colonne interessate sono già gestite/rimosse da DataCleaner.
         ('geo_freq_encoder', FrequencyEncoder()),
         ('cat_encoder', CategoricalEncoder()),
     ]
