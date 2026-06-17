@@ -4,6 +4,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_selection import chi2, mutual_info_classif
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
+from .config import FIGURES_DIR, RANDOM_STATE
 from .utils import plot_feature_ranking
 
 class FeatureSelection:
@@ -22,7 +23,7 @@ class FeatureSelection:
         ranking = corr_matrix[y.name].abs().sort_values(ascending=False)
         ranking = ranking.drop(y.name) # Rimuoviamo il target stesso
         
-        plot_feature_ranking(ranking, title="Correlation Ranking", save_path="plots/corr_ranking.png")
+        plot_feature_ranking(ranking, title="Correlation Ranking", save_path=FIGURES_DIR / "corr_ranking.png")
         return ranking
 
     def get_high_correlation_pairs(self, X: pd.DataFrame, threshold: float = 0.8) -> pd.DataFrame:
@@ -46,26 +47,26 @@ class FeatureSelection:
         chi_scores, p_values = chi2(X_adj, y)
         scores = pd.Series(chi_scores, index=X.columns).sort_values(ascending=False)
         
-        plot_feature_ranking(scores, title="Chi-2 Scores", save_path="plots/chi2_ranking.png")
+        plot_feature_ranking(scores, title="Chi-2 Scores", save_path=FIGURES_DIR / "chi2_ranking.png")
         return scores
 
     @staticmethod
     def information_gain_scores(X: pd.DataFrame, y: pd.Series) -> pd.Series:
         """Calcola la Mutual Information tra feature e target."""
-        mi = mutual_info_classif(X, y, random_state=42)
+        mi = mutual_info_classif(X, y, random_state=RANDOM_STATE)
         scores = pd.Series(mi, index=X.columns).sort_values(ascending=False)
         
-        plot_feature_ranking(scores, title="Mutual Information Scores", save_path="plots/mi_ranking.png")
+        plot_feature_ranking(scores, title="Mutual Information Scores", save_path=FIGURES_DIR / "mi_ranking.png")
         return scores
 
     @staticmethod
     def random_forest_importances(X: pd.DataFrame, y: pd.Series) -> pd.Series:
         """Calcola l'importanza delle feature tramite Random Forest."""
-        rf = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+        rf = RandomForestClassifier(n_estimators=100, random_state=RANDOM_STATE, n_jobs=-1)
         rf.fit(X, y)
         
         scores = pd.Series(rf.feature_importances_, index=X.columns).sort_values(ascending=False)
-        plot_feature_ranking(scores, title="Random Forest Importance", save_path="plots/rf_importance.png")
+        plot_feature_ranking(scores, title="Random Forest Importance", save_path=FIGURES_DIR / "rf_importance.png")
         return scores
 
     @staticmethod
@@ -74,13 +75,13 @@ class FeatureSelection:
         from sklearn.preprocessing import LabelEncoder
         from xgboost import XGBClassifier
         
-        model = XGBClassifier(n_estimators=100, random_state=42, eval_metric="logloss")
+        model = XGBClassifier(n_estimators=100, random_state=RANDOM_STATE, eval_metric="logloss")
         le = LabelEncoder()
         y_encoded = le.fit_transform(y)
         model.fit(X, y_encoded)
         
         scores = pd.Series(model.feature_importances_, index=X.columns).sort_values(ascending=False)
-        plot_feature_ranking(scores, title="XGBoost Importance", save_path="plots/xgb_importance.png")
+        plot_feature_ranking(scores, title="XGBoost Importance", save_path=FIGURES_DIR / "xgb_importance.png")
         return scores
 
     @staticmethod
@@ -90,13 +91,13 @@ class FeatureSelection:
         from catboost import CatBoostClassifier
 
         # In questo stadio X è già numerico, quindi non servono cat_features
-        model = CatBoostClassifier(iterations=100, random_state=42, verbose=0)
+        model = CatBoostClassifier(iterations=100, random_state=RANDOM_STATE, verbose=0)
         le = LabelEncoder()
         y_encoded = le.fit_transform(y)
         model.fit(X, y_encoded)
         
         scores = pd.Series(model.feature_importances_, index=X.columns).sort_values(ascending=False)
-        plot_feature_ranking(scores, title="CatBoost Importance", save_path="plots/catboost_importance.png")
+        plot_feature_ranking(scores, title="CatBoost Importance", save_path=FIGURES_DIR / "catboost_importance.png")
         return scores
 
     def relief_importances(self, X: pd.DataFrame, y: pd.Series) -> pd.Series:
@@ -107,7 +108,7 @@ class FeatureSelection:
         relief.fit(X.values, y.values)
         
         scores = pd.Series(relief.feature_importances_, index=X.columns).sort_values(ascending=False)
-        plot_feature_ranking(scores, title="ReliefF Ranking", save_path="plots/relief_ranking.png")
+        plot_feature_ranking(scores, title="ReliefF Ranking", save_path=FIGURES_DIR / "relief_ranking.png")
         return scores
 
     def pca_transformation(self, X: pd.DataFrame, n_components: int = 10) -> pd.DataFrame:
@@ -129,7 +130,7 @@ class FeatureSelection:
         from sklearn.feature_selection import RFE
         from sklearn.ensemble import RandomForestClassifier
         
-        estimator = RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=-1)
+        estimator = RandomForestClassifier(n_estimators=50, random_state=RANDOM_STATE, n_jobs=-1)
         selector = RFE(estimator, n_features_to_select=n_features_to_select, step=5)
         selector = selector.fit(X, y)
         

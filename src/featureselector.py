@@ -1,20 +1,38 @@
-from sklearn.base import BaseEstimator, TransformerMixin
+from __future__ import annotations
+
 import pandas as pd
-from src.feature_selection import FeatureSelection
+from sklearn.base import BaseEstimator, TransformerMixin
+
+from .feature_selection import FeatureSelection
+
 
 class FeatureSelector(BaseEstimator, TransformerMixin):
     """
-    Transformer per la selezione automatica delle feature basato sui metodi di FeatureSelection.
-    Compatibile con le Pipeline di Scikit-Learn.
+    Scikit-learn transformer for optional feature selection.
+
+    The selector wraps the scoring methods implemented in FeatureSelection and
+    keeps the best features according to a minimum score threshold and a maximum
+    number of retained variables.
     """
 
-    def __init__(self, fs_method: str, threshold=0.005, max_features_to_hold=30):
-        """
-        Parametri:
-        - fs_method: metodo di selezione ('rf', 'xgb', 'ctb', 'corr_matrix', 'chi2', 'mu', 'rlf')
-        - threshold: importanza minima per mantenere una feature
-        - max_features_to_hold: numero massimo di feature da mantenere
-        """
+    SUPPORTED_METHODS = {
+        "rf",
+        "xgb",
+        "ctb",
+        "corr_matrix",
+        "chi2",
+        "mu",
+        "rlf",
+        "rfe",
+        "sfs",
+    }
+
+    def __init__(
+        self,
+        fs_method: str,
+        threshold: float = 0.005,
+        max_features_to_hold: int = 30,
+    ):
         self.fs_method = fs_method
         self.threshold = threshold
         self.max_features_to_hold = max_features_to_hold
@@ -22,75 +40,89 @@ class FeatureSelector(BaseEstimator, TransformerMixin):
         self.scores_ = None
 
     def fit(self, X: pd.DataFrame, y: pd.Series):
-        """
-        Apprende quali sono le feature migliori basandosi sul metodo scelto.
-        """
-        # Assicuriamoci che X sia un DataFrame per gestire i nomi delle colonne
+        """Select the most relevant features according to the configured method."""
         if not isinstance(X, pd.DataFrame):
             X = pd.DataFrame(X)
-            
-        fs = FeatureSelection()
-        
-        # 1. Calcolo degli score in base al metodo scelto
-        if self.fs_method == 'rf':
-            scores = fs.random_forest_importances(X, y)
-        elif self.fs_method == 'xgb':
-            scores = fs.xgboost_importances(X, y)
-        elif self.fs_method == 'ctb':
-            scores = fs.catboost_importances(X, y)
-        elif self.fs_method == 'corr_matrix':
-            scores = fs.correlation_ranking(X, y)
-        elif self.fs_method == 'chi2':
-            scores = fs.chi_square_scores(X, y)
-        elif self.fs_method == 'mu':
-            scores = fs.information_gain_scores(X, y)
-        elif self.fs_method == 'rlf':
-            scores = fs.relief_importances(X, y)
-        elif self.fs_method == 'rfe':
-            scores = fs.rfe_selection(X, y, n_features_to_select=self.max_features_to_hold)
-        elif self.fs_method == 'sfs':
-            scores = fs.sfs_selection(X, y, n_features_to_select=self.max_features_to_hold)
-        else:
-            raise ValueError(f"Metodo {self.fs_method} non riconosciuto.")
 
-        # 2. Ordinamento e salvataggio degli score
+        fs = FeatureSelection()
+        scores = self._compute_scores(fs, X, y)
+
         scores = scores.dropna().sort_values(ascending=False)
         self.scores_ = scores
 
-        # 3. Selezione delle feature che superano la soglia
         selected_features = scores[scores >= self.threshold].index.tolist()
 
-        # 4. Fallback: se la soglia è troppo restrittiva, prendiamo comunque le migliori
         if not selected_features:
             selected_features = scores.index.tolist()
 
-        # 5. Applicazione del limite massimo di feature
-        self.selected_features_ = selected_features[:self.max_features_to_hold]
+        self.selected_features_ = selected_features[: self.max_features_to_hold]
 
         if not self.selected_features_:
-            raise ValueError("FeatureSelector non ha selezionato nessuna feature.")
-        
+            raise ValueError("FeatureSelector did not select any feature.")
+
         print(
-            f"FeatureSelector ({self.fs_method}): selezionate "
-            f"{len(self.selected_features_)} feature su {X.shape[1]}"
-        )        
+            f"FeatureSelector ({self.fs_method}): selected "
+            f"{len(self.selected_features_)} features out of {X.shape[1]}"
+        )
+
         return self
 
     def transform(self, X: pd.DataFrame):
-        """
-        Riduce il dataset alle sole feature selezionate durante il fit.
-        """
+        """Reduce the dataset to the features selected during fit."""
         if self.selected_features_ is None:
-            raise ValueError("Il selettore deve essere addestrato (fit) prima di trasformare i dati.")
-            
-        # Conversione in DataFrame se necessario
+            raise ValueError("FeatureSelector must be fitted before transform.")
+
         if not isinstance(X, pd.DataFrame):
             X = pd.DataFrame(X)
-            
-        # Restituiamo solo le feature selezionate presenti in X
-        existing_features = [f for f in self.selected_features_ if f in X.columns]
+
+        existing_features = [
+            feature for feature in self.selected_features_ if feature in X.columns
+        ]
         return X[existing_features]
 
     def get_feature_names_out(self, input_features=None):
-        """Metodo di utilità per pipeline di Scikit-Learn."""
+        """Return the selected feature names for scikit-learn compatibility."""
         return self.selected_features_
+
+    def _compute_scores(
+        self,
+        feature_selection: FeatureSelection,
+        X: pd.DataFrame,
+        y: pd.Series,
+    ) -> pd.Series:
+        """Compute feature scores using the configured selection method."""
+        if self.fs_method not in self.SUPPORTED_METHODS:
+            allowed = ", ".join(sorted(self.SUPPORTED_METHODS))
+            raise ValueError(
+                f"Feature-selection method not recognized: {self.fs_method}. "
+                f"Allowed values: {allowed}."
+            )
+
+        if self.fs_method == "rf":
+            return feature_selection.random_forest_importances(X, y)
+        if self.fs_method == "xgb":
+            return feature_selection.xgboost_importances(X, y)
+        if self.fs_method == "ctb":
+            return feature_selection.catboost_importances(X, y)
+        if self.fs_method == "corr_matrix":
+            return feature_selection.correlation_ranking(X, y)
+        if self.fs_method == "chi2":
+            return feature_selection.chi_square_scores(X, y)
+        if self.fs_method == "mu":
+            return feature_selection.information_gain_scores(X, y)
+        if self.fs_method == "rlf":
+            return feature_selection.relief_importances(X, y)
+        if self.fs_method == "rfe":
+            return feature_selection.rfe_selection(
+                X,
+                y,
+                n_features_to_select=self.max_features_to_hold,
+            )
+        if self.fs_method == "sfs":
+            return feature_selection.sfs_selection(
+                X,
+                y,
+                n_features_to_select=self.max_features_to_hold,
+            )
+
+        raise RuntimeError("Unreachable feature-selection branch.")

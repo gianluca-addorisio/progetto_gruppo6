@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.base import clone
+from sklearn.model_selection import train_test_split
 from sklearn.utils.class_weight import compute_sample_weight
 
 from .data_loader import DataLoader
@@ -18,59 +19,79 @@ from .models import (
     get_voting_ensemble,
 )
 from .featureselector import FeatureSelector
-from .config import RANDOM_STATE, TARGET_COL
+from .config import (
+    FINAL_DO_TUNING,
+    FINAL_FEATURE_SELECTION,
+    FINAL_MODEL_NAME,
+    FINAL_SPLIT_STRATEGY,
+    FINAL_SUBMISSION_FILE,
+    FINAL_USE_PCA,
+    FINAL_USE_SAMPLE_WEIGHT,
+    RANDOM_STATE,
+    TARGET_COL,
+    VALID_MODEL_NAMES,
+)
 from .hyperparameter_tuning import ModelTuner
 from .hyperparameter_tuning_feature_selection import FeatureSelectionTuner
 
-from sklearn.model_selection import train_test_split
-
 
 def run_training_pipeline(
-    feature_selection: bool = True,
-    split_strategy: int = 4,
-    use_sample_weight: bool = False,
+    feature_selection: bool = FINAL_FEATURE_SELECTION,
+    split_strategy: int = FINAL_SPLIT_STRATEGY,
+    use_sample_weight: bool = FINAL_USE_SAMPLE_WEIGHT,
     fs_method: str = "ctb",
     fs_threshold: float = 0.005,
     max_features_to_hold: int = 30,
-    use_pca: bool = False,
+    use_pca: bool = FINAL_USE_PCA,
     pca_n_components: int = 40,
-    do_tuning: bool = False,
+    do_tuning: bool = FINAL_DO_TUNING,
     tuning_iter: int = 50,
     tuning_sample_size: int = 30000,
     models_to_run=None,
 ):
     """
-    Pipeline principale ottimizzata:
-    1. Tuning globale (opzionale) su subset per trovare i parametri migliori (Modello + FS).
-    2. Valutazione robusta usando i parametri SPECIFICI per ogni modello.
+    Run the training and validation workflow.
+
+    The default arguments correspond to the final project configuration:
+    XGBoost-compatible preprocessing, hold-out strategy 2, no feature selection,
+    no PCA and no hyperparameter tuning. Optional tuning, feature selection and
+    cross-validation flows are kept for reproducibility of previous experiments.
     """
     print("--- 1. Loading Data ---")
     data_loader = DataLoader()
     X, y = data_loader.load_train_test()
     y = y - 1
 
-    # Inizializziamo i Tuner
+    # Optional tuners used only when do_tuning=True.
     tuner = ModelTuner(random_state=RANDOM_STATE)
     fs_tuner = FeatureSelectionTuner(random_state=RANDOM_STATE)
     
-    # Dizionario per memorizzare la configurazione ottimizzata di ogni modello
-    # Ogni entry sarà: { 'model': estimator, 'fs_params': { 'threshold': ..., 'max_features_to_hold': ... } }
+    # Base model configurations used by single models and ensembles.
     model_configs = {
         "RandomForest": {
             "model": get_random_forest_model(),
-            "fs_params": {"threshold": fs_threshold, "max_features_to_hold": max_features_to_hold}
+            "fs_params": {
+                "threshold": fs_threshold,
+                "max_features_to_hold": max_features_to_hold,
+            },
         },
         "XGBoost": {
             "model": get_xgboost_model(),
-            "fs_params": {"threshold": fs_threshold, "max_features_to_hold": max_features_to_hold}
+            "fs_params": {
+                "threshold": fs_threshold,
+                "max_features_to_hold": max_features_to_hold,
+            },
         },
         "LightGBM": {
             "model": get_lightgbm_model(),
-            "fs_params": {"threshold": fs_threshold, "max_features_to_hold": max_features_to_hold}
-        }
+            "fs_params": {
+                "threshold": fs_threshold,
+                "max_features_to_hold": max_features_to_hold,
+            },
+        },
     }
 
-    valid_models = ["RandomForest", "XGBoost", "LightGBM", "VotingEnsemble", "StackingEnsemble"]
+    valid_models = list(VALID_MODEL_NAMES)
 
     if models_to_run is None:
         models_to_run = valid_models.copy()
@@ -86,24 +107,36 @@ def run_training_pipeline(
             f"Valori ammessi: {valid_models}"
         )
 
-    # --- 2. GLOBAL TUNING (se richiesto) ---
+    # Optional global tuning on a stratified subset.
     if do_tuning:
-        print(f"\n--- 2. Global Tuning attivo ({tuning_iter} iterazioni su {tuning_sample_size} campioni) ---")
+        print(
+            f"\n--- 2. Global Tuning attivo "
+            f"({tuning_iter} iterazioni su {tuning_sample_size} campioni) ---"
+        )
         X_tune, _, y_tune, _ = train_test_split(
-            X, y, train_size=min(tuning_sample_size, len(X)), 
-            stratify=y, random_state=RANDOM_STATE
+            X,
+            y,
+            train_size=min(tuning_sample_size, len(X)),
+            stratify=y,
+            random_state=RANDOM_STATE,
         )
 
-        for name in [m for m in ["RandomForest", "XGBoost", "LightGBM"] if m in models_to_run]:
+        tunable_models = [
+            model_name
+            for model_name in ["RandomForest", "XGBoost", "LightGBM"]
+            if model_name in models_to_run
+        ]
+
+        for name in tunable_models:
             print(f"  > Tuning {name} (Modello + Feature Selection)...")
             
-            # Creiamo una pipeline temporanea con i parametri di default per il tuning
+            # Temporary pipeline used during tuning.
             temp_fs = FeatureSelector(fs_method=fs_method) if feature_selection else None
             temp_pipeline = make_complete_pipeline(
-                model_configs[name]["model"], 
+                model_configs[name]["model"],
                 feature_selector=temp_fs,
-                use_pca=use_pca, 
-                pca_n_components=pca_n_components
+                use_pca=use_pca,
+                pca_n_components=pca_n_components,
             )
             
             param_grid = tuner.get_param_grid(name)
@@ -126,27 +159,39 @@ def run_training_pipeline(
                     n_iter=tuning_iter,
                 )
             
-            # SALVATAGGIO CONFIGURAZIONE SPECIFICA
-            model_configs[name]["model"] = best_pipeline.named_steps['model']
+            # Store the tuned estimator and, when enabled, feature-selection parameters.
+            model_configs[name]["model"] = best_pipeline.named_steps["model"]
             if feature_selection:
                 model_configs[name]["fs_params"] = {
-                    "threshold": best_params.get('feature_selector__threshold', fs_threshold),
-                    "max_features_to_hold": best_params.get('feature_selector__max_features_to_hold', max_features_to_hold)
+                    "threshold": best_params.get(
+                        "feature_selector__threshold",
+                        fs_threshold,
+                    ),
+                    "max_features_to_hold": best_params.get(
+                        "feature_selector__max_features_to_hold",
+                        max_features_to_hold,
+                    ),
                 }
             print(f"    Tuning completato per {name}.")
 
-    # Preparazione Ensembles
-    # Per semplicità, gli ensemble useranno i parametri di FS del modello con performance tipicamente migliore (LightGBM)
-    ensemble_fs_params = model_configs["LightGBM"]["fs_params"] if do_tuning else {"threshold": fs_threshold, "max_features_to_hold": max_features_to_hold}
+    # Build ensembles only when explicitly requested.
+    ensemble_fs_params = (
+        model_configs["LightGBM"]["fs_params"]
+        if do_tuning
+        else {
+            "threshold": fs_threshold,
+            "max_features_to_hold": max_features_to_hold,
+        }
+    )
     
     if "VotingEnsemble" in models_to_run:
         model_configs["VotingEnsemble"] = {
             "model": get_voting_ensemble(
                 model_configs["RandomForest"]["model"],
                 model_configs["XGBoost"]["model"],
-                model_configs["LightGBM"]["model"]
+                model_configs["LightGBM"]["model"],
             ),
-            "fs_params": ensemble_fs_params
+            "fs_params": ensemble_fs_params,
         }
 
     if "StackingEnsemble" in models_to_run:
@@ -154,12 +199,12 @@ def run_training_pipeline(
             "model": get_stacking_ensemble(
                 model_configs["RandomForest"]["model"],
                 model_configs["XGBoost"]["model"],
-                model_configs["LightGBM"]["model"]
+                model_configs["LightGBM"]["model"],
             ),
-            "fs_params": ensemble_fs_params
+            "fs_params": ensemble_fs_params,
         }
 
-    # Tiene solo i modelli richiesti
+    # Keep only the requested models.
     model_configs = {
         name: config
         for name, config in model_configs.items()
@@ -173,36 +218,47 @@ def run_training_pipeline(
     results = []
 
     if split_strategy in [1, 2]:
-        # --- HOLD-OUT FLOW ---
-        X_train, X_val, y_train, y_val = data_loader.split_dataset_by_strategy(split_strategy, X, y)
+        # Hold-out validation.
+        X_train, X_val, y_train, y_val = data_loader.split_dataset_by_strategy(
+            split_strategy,
+            X,
+            y,
+        )
         print(f"Train size: {X_train.shape}, Validation size: {X_val.shape}")
         
         for name, config in model_configs.items():
             fs_label = (
-                f"con FS dedicata ({fs_method}, max {config['fs_params']['max_features_to_hold']} feat)"
+                (
+                    f"con FS dedicata "
+                    f"({fs_method}, max {config['fs_params']['max_features_to_hold']} feat)"
+                )
                 if feature_selection
                 else "senza feature selection"
             )
             pca_label = f" + PCA({pca_n_components})" if use_pca else ""
             print(f"  [Model: {name}] Training {fs_label}{pca_label}...")
             
-            # Applichiamo la FS specifica del modello
+            # Apply model-specific feature-selection parameters when enabled.
             fs_p = config["fs_params"]
-            fs = FeatureSelector(
-                fs_method=fs_method, 
-                threshold=fs_p["threshold"], 
-                max_features_to_hold=fs_p["max_features_to_hold"]
-            ) if feature_selection else None
+            fs = (
+                FeatureSelector(
+                    fs_method=fs_method,
+                    threshold=fs_p["threshold"],
+                    max_features_to_hold=fs_p["max_features_to_hold"],
+                )
+                if feature_selection
+                else None
+            )
             
             pipeline = make_complete_pipeline(
-                config["model"], 
-                feature_selector=fs, 
-                use_pca=use_pca, 
-                pca_n_components=pca_n_components
+                config["model"],
+                feature_selector=fs,
+                use_pca=use_pca,
+                pca_n_components=pca_n_components,
             )
             
             if use_sample_weight and name not in ["VotingEnsemble", "StackingEnsemble"]:
-                weights = compute_sample_weight(class_weight='balanced', y=y_train)
+                weights = compute_sample_weight(class_weight="balanced", y=y_train)
                 pipeline.fit(X_train, y_train, model__sample_weight=weights)
             else:
                 pipeline.fit(X_train, y_train)
@@ -219,12 +275,15 @@ def run_training_pipeline(
             print(f"    Micro-F1: {metrics['micro_f1']:.4f}{fs_result}{pca_result}")
 
     else:
-        # --- CROSS-VALIDATION FLOW ---
+        # Cross-validation.
         splits = data_loader.split_dataset_by_strategy(split_strategy, X, y)
         
         for name, config in model_configs.items():
             fs_label = (
-                f"con FS dedicata ({fs_method}, max {config['fs_params']['max_features_to_hold']} feat)"
+                (
+                    f"con FS dedicata "
+                    f"({fs_method}, max {config['fs_params']['max_features_to_hold']} feat)"
+                )
                 if feature_selection
                 else "senza feature selection"
             )
@@ -234,28 +293,37 @@ def run_training_pipeline(
             fs_p = config["fs_params"]
             
             for fold, (train_idx, val_idx) in enumerate(splits):
-                X_train_f, X_val_f = X.iloc[train_idx], X.iloc[val_idx]
-                y_train_f, y_val_f = y.iloc[train_idx], y.iloc[val_idx]
+                X_train_f = X.iloc[train_idx]
+                X_val_f = X.iloc[val_idx]
+                y_train_f = y.iloc[train_idx]
+                y_val_f = y.iloc[val_idx]
                 
-                # Clone del modello ottimizzato
+                # Clone the estimator for the current fold.
                 model_fold = clone(config["model"])
                 
-                # Ricreiamo la FS specifica per il fold
-                fs = FeatureSelector(
-                    fs_method=fs_method, 
-                    threshold=fs_p["threshold"], 
-                    max_features_to_hold=fs_p["max_features_to_hold"]
-                ) if feature_selection else None
+                # Recreate feature selection inside each fold to avoid leakage.
+                fs = (
+                    FeatureSelector(
+                        fs_method=fs_method,
+                        threshold=fs_p["threshold"],
+                        max_features_to_hold=fs_p["max_features_to_hold"],
+                    )
+                    if feature_selection
+                    else None
+                )
                 
                 pipeline = make_complete_pipeline(
-                    model_fold, 
-                    feature_selector=fs, 
-                    use_pca=use_pca, 
-                    pca_n_components=pca_n_components
+                    model_fold,
+                    feature_selector=fs,
+                    use_pca=use_pca,
+                    pca_n_components=pca_n_components,
                 )
 
                 if use_sample_weight and name not in ["VotingEnsemble", "StackingEnsemble"]:
-                    weights = compute_sample_weight(class_weight="balanced", y=y_train_f)
+                    weights = compute_sample_weight(
+                        class_weight="balanced",
+                        y=y_train_f,
+                    )
                     pipeline.fit(X_train_f, y_train_f, model__sample_weight=weights)
                 else:
                     pipeline.fit(X_train_f, y_train_f)
@@ -282,12 +350,12 @@ def run_training_pipeline(
     comparison_df = pd.DataFrame(results)
     print("\n--- 4. Final Comparison ---")
     print(comparison_df.to_string(index=False))
-    
+
     return comparison_df
 
 
 def _get_model_by_name(model_name: str):
-    """Restituisce il modello richiesto per la pipeline finale."""
+    """Return the estimator associated with the requested model name."""
     models = {
         "RandomForest": get_random_forest_model,
         "XGBoost": get_xgboost_model,
@@ -306,27 +374,27 @@ def _get_model_by_name(model_name: str):
 
 
 def generate_final_submission(
-    model_name: str = "XGBoost",
-    output_path: str | Path = "outputs/submissions/final_submission.csv",
-    feature_selection: bool = False,
+    model_name: str = FINAL_MODEL_NAME,
+    output_path: str | Path = FINAL_SUBMISSION_FILE,
+    feature_selection: bool = FINAL_FEATURE_SELECTION,
     fs_method: str = "rf",
     fs_threshold: float = 0.005,
     max_features_to_hold: int = 30,
-    use_pca: bool = False,
+    use_pca: bool = FINAL_USE_PCA,
     pca_n_components: int = 40,
 ):
     """
-    Addestra il modello finale su tutto il training set e genera il file di submission.
+    Train the selected model on the full training set and create a submission.
 
-    Configurazione finale consigliata:
-    XGBoost senza feature selection, senza PCA e senza tuning.
+    Defaults correspond to the final project configuration: XGBoost without
+    feature selection and without PCA.
     """
     print("--- Generazione submission finale ---")
 
     data_loader = DataLoader()
     X, y = data_loader.load_train_test()
 
-    # Le classi originali sono 1, 2, 3. I modelli vengono addestrati su 0, 1, 2.
+    # Original labels are 1, 2, 3. Models are trained on 0, 1, 2.
     y = y - 1
 
     model = _get_model_by_name(model_name)
@@ -359,7 +427,7 @@ def generate_final_submission(
 
     predictions = pipeline.predict(test_values)
 
-    # Rimappatura da 0, 1, 2 alle classi richieste dalla competizione: 1, 2, 3.
+    # Map predictions back to the competition labels: 1, 2, 3.
     submission[TARGET_COL] = predictions + 1
 
     output_path = Path(output_path)
@@ -371,14 +439,15 @@ def generate_final_submission(
 
     return submission
 
+
 if __name__ == "__main__":
     results = run_training_pipeline(
-        feature_selection=False,
-        split_strategy=2,
-        use_sample_weight=False,
-        use_pca=False,
-        do_tuning=False,
-        models_to_run=["XGBoost"],
+        feature_selection=FINAL_FEATURE_SELECTION,
+        split_strategy=FINAL_SPLIT_STRATEGY,
+        use_sample_weight=FINAL_USE_SAMPLE_WEIGHT,
+        use_pca=FINAL_USE_PCA,
+        do_tuning=FINAL_DO_TUNING,
+        models_to_run=[FINAL_MODEL_NAME],
     )
 
     print(results)

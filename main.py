@@ -8,10 +8,16 @@ from typing import Iterable
 import pandas as pd
 
 from src.config import (
+    FINAL_MODEL_NAME,
+    FINAL_SPLIT_STRATEGY,
+    FINAL_SUBMISSION_FILE,
+    PROJECT_ROOT,
+    RESULTS_COMPARISON_FILE,
     SUBMISSION_FORMAT_FILE,
     TEST_VALUES_FILE,
     TRAIN_LABELS_FILE,
     TRAIN_VALUES_FILE,
+    VALID_MODEL_NAMES,
 )
 from src.pipeline_training_model import (
     generate_final_submission,
@@ -19,18 +25,6 @@ from src.pipeline_training_model import (
 )
 
 
-FINAL_MODEL = "XGBoost"
-FINAL_SPLIT_STRATEGY = 2
-FINAL_METRICS_PATH = Path("outputs/metrics/results_comparison.csv")
-FINAL_SUBMISSION_PATH = Path("outputs/submissions/final_submission.csv")
-
-VALID_MODELS = [
-    "RandomForest",
-    "XGBoost",
-    "LightGBM",
-    "VotingEnsemble",
-    "StackingEnsemble",
-]
 
 
 def _check_required_data_files() -> None:
@@ -59,16 +53,24 @@ def _parse_models(value: str | None) -> list[str] | None:
         return None
 
     models = [item.strip() for item in value.split(",") if item.strip()]
-    invalid_models = [model for model in models if model not in VALID_MODELS]
+    invalid_models = [model for model in models if model not in VALID_MODEL_NAMES]
 
     if invalid_models:
-        allowed = ", ".join(VALID_MODELS)
+        allowed = ", ".join(VALID_MODEL_NAMES)
         invalid = ", ".join(invalid_models)
         raise argparse.ArgumentTypeError(
             f"Invalid model(s): {invalid}. Allowed values: {allowed}."
         )
 
     return models
+
+
+def _format_path_for_help(path: Path) -> str:
+    """Return a repository-relative path when possible."""
+    try:
+        return str(path.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(path)
 
 
 def _save_metrics(results: pd.DataFrame, output_path: Path | None) -> None:
@@ -160,9 +162,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     evaluate_parser.add_argument(
         "--model",
-        choices=VALID_MODELS,
-        default=FINAL_MODEL,
-        help=f"Model to evaluate. Default: {FINAL_MODEL}.",
+        choices=VALID_MODEL_NAMES,
+        default=FINAL_MODEL_NAME,
+        help=f"Model to evaluate. Default: {FINAL_MODEL_NAME}.",
     )
     evaluate_parser.add_argument(
         "--split-strategy",
@@ -200,8 +202,8 @@ def build_parser() -> argparse.ArgumentParser:
     compare_parser.add_argument(
         "--output",
         type=Path,
-        default=FINAL_METRICS_PATH,
-        help=f"CSV path where comparison metrics will be saved. Default: {FINAL_METRICS_PATH}.",
+        default=RESULTS_COMPARISON_FILE,
+        help=f"CSV path where comparison metrics will be saved. Default: {_format_path_for_help(RESULTS_COMPARISON_FILE)}.",
     )
     compare_parser.set_defaults(func=compare_models)
 
@@ -211,15 +213,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     submission_parser.add_argument(
         "--model",
-        choices=VALID_MODELS,
-        default=FINAL_MODEL,
-        help=f"Model used for final training. Default: {FINAL_MODEL}.",
+        choices=VALID_MODEL_NAMES,
+        default=FINAL_MODEL_NAME,
+        help=f"Model used for final training. Default: {FINAL_MODEL_NAME}.",
     )
     submission_parser.add_argument(
         "--output",
         type=Path,
-        default=FINAL_SUBMISSION_PATH,
-        help=f"Submission CSV path. Default: {FINAL_SUBMISSION_PATH}.",
+        default=FINAL_SUBMISSION_FILE,
+        help=f"Submission CSV path. Default: {_format_path_for_help(FINAL_SUBMISSION_FILE)}.",
     )
     submission_parser.set_defaults(func=make_submission)
 

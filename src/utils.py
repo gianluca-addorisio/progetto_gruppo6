@@ -3,8 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import joblib
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+
+from .config import FIGURES_DIR
 
 
 def ensure_dir(path: str | Path) -> Path:
@@ -36,16 +41,12 @@ def load_model(path: str | Path):
     """Load a model saved with joblib."""
     return joblib.load(path)
 
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import pandas as pd
 
 
 def plot_feature_ranking(
     scores: pd.Series,
     title: str = "Feature Ranking",
-    save_path: str = "plots/feature_ranking.png",
+    save_path: str | Path = FIGURES_DIR / "feature_ranking.png",
 ):
     """
     Save feature ranking plot as PNG.
@@ -78,7 +79,7 @@ def plot_feature_ranking(
 def plot_correlation_heatmap(
     df: pd.DataFrame,
     title: str = "Correlation Heatmap",
-    save_path: str = "plots/correlation_heatmap.png",
+    save_path: str | Path = FIGURES_DIR / "correlation_heatmap.png",
 ):
     """
     Save correlation heatmap as PNG.

@@ -1,56 +1,58 @@
+from sklearn.decomposition import PCA
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer
 
-from .cleaner import DataCleaner
+from ..config import RANDOM_STATE
+from ..features import add_engineered_features
 from .age_handler import AgeHandler
-
+from .cleaner import DataCleaner
 from .encoding import CategoricalEncoder, FrequencyEncoder
 from .scaling import NumericalScaler
-from sklearn.decomposition import PCA
-from ..featureselector import FeatureSelector
-
-from ..features import add_engineered_features
 
 
-def get_preprocessing_steps(scale_numeric=False):
+def get_preprocessing_steps(scale_numeric: bool = False):
     """
-    Restituisce la lista dei passi di preprocessing aggiornata alla nuova strategia.
-    
-    L'ordine è critico:
-    1. Feature Engineering: crea nuove feature da quelle esistenti.
-    2. DataCleaner: rimuove le originali ormai ridondanti (e identificativi).
-    3. AgeHandler: gestisce il valore anomalo di age = 995.
-    4. FrequencyEncoder: encoding specifico per geo_level_2 e geo_level_3.
-    5. CategoricalEncoder: One-Hot per le categoriche e geo_level_1_id.
-    6. NumericalScaler (opzionale): scaling finale quando richiesto.
+    Return the preprocessing steps used by the final training pipeline.
+
+    Order:
+    1. Feature engineering from raw input variables.
+    2. Cleaning and removal of redundant or identifier columns.
+    3. Handling of anomalous building-age values.
+    4. Frequency encoding for high-cardinality geographical variables.
+    5. One-hot encoding for categorical variables.
+    6. Optional numerical scaling, mainly required before PCA.
     """
     steps = [
-        ('feature_engineering', FunctionTransformer(add_engineered_features)),
-        ('cleaner', DataCleaner()),
-        ('age_handler', AgeHandler()),
-        # OutlierCapper non è incluso nella pipeline standard: le colonne interessate sono già gestite/rimosse da DataCleaner.
-        ('geo_freq_encoder', FrequencyEncoder()),
-        ('cat_encoder', CategoricalEncoder()),
+        ("feature_engineering", FunctionTransformer(add_engineered_features)),
+        ("cleaner", DataCleaner()),
+        ("age_handler", AgeHandler()),
+        ("geo_freq_encoder", FrequencyEncoder()),
+        ("cat_encoder", CategoricalEncoder()),
     ]
 
     if scale_numeric:
-        steps.append(('scaler', NumericalScaler()))
+        steps.append(("scaler", NumericalScaler()))
 
     return steps
 
 
-def get_preprocessing_pipeline(scale_numeric=False):
-    """
-    Costruisce la pipeline di preprocessing completa.
-    """
+def get_preprocessing_pipeline(scale_numeric: bool = False):
+    """Build a preprocessing-only pipeline."""
     return Pipeline(get_preprocessing_steps(scale_numeric))
 
 
-def make_complete_pipeline(model, scale_numeric=False, feature_selector=None, use_pca=False,
-                           pca_n_components: int = 40):
+def make_complete_pipeline(
+    model,
+    scale_numeric: bool = False,
+    feature_selector=None,
+    use_pca: bool = False,
+    pca_n_components: int = 40,
+):
     """
-    Crea una pipeline "piatta" (non nidificata) che include sia 
-    preprocessing che modello.
+    Build the complete modeling pipeline.
+
+    The pipeline applies preprocessing first, then optional feature selection,
+    optional PCA and finally the estimator.
     """
     if use_pca:
         scale_numeric = True
@@ -58,32 +60,11 @@ def make_complete_pipeline(model, scale_numeric=False, feature_selector=None, us
     steps = get_preprocessing_steps(scale_numeric)
 
     if feature_selector is not None:
-        steps.append(('feature_selector', feature_selector))
+        steps.append(("feature_selector", feature_selector))
 
     if use_pca:
-        steps.append(('pca', PCA(n_components=pca_n_components, random_state=42)))
+        steps.append(("pca", PCA(n_components=pca_n_components, random_state=RANDOM_STATE)))
 
-    steps.append(('model', model))
-
-    return Pipeline(steps)
-
-
-def make_complete_pipeline_with_selection(model, fs_method='rf', threshold=0.005, max_features=20, scale_numeric=True):
-    """
-    Crea una pipeline completa che include:
-    1. Preprocessing
-    2. Feature Selection
-    3. Modello
-    """
-    steps = get_preprocessing_steps(scale_numeric)
-    steps.append(('feature_selector', FeatureSelector(fs_method, threshold, max_features)))
-    steps.append(('model', model))
+    steps.append(("model", model))
 
     return Pipeline(steps)
-
-
-def make_complete_pipeline_from_features(model, X, scale_numeric=True):
-    """
-    Crea una pipeline che include solo il modello (presuppone dati già preprocessati).
-    """
-    return Pipeline([('model', model)])
