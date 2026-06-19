@@ -63,7 +63,9 @@ def make_complete_pipeline(
         steps.append(("feature_selector", feature_selector))
 
     if use_pca:
-        steps.append(("pca", PCA(n_components=pca_n_components, random_state=RANDOM_STATE)))
+        steps.append(
+            ("pca", PCA(n_components=pca_n_components, random_state=RANDOM_STATE))
+        )
 
     steps.append(("model", model))
 

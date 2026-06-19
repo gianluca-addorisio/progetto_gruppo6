@@ -83,10 +83,10 @@ class DataLoader:
 
     def load_train_test(self):
         """
-        Restituisce X, y, test_values e submission_format.
+        Return training features X and target y.
 
-        X mantiene inizialmente building_id.
-        La rimozione dell'identificativo avviene nella fase di preprocessing.
+        X initially keeps building_id. The identifier is removed later during
+        preprocessing.
         """
 
         X = self.train_df.drop(columns=[TARGET_COL])

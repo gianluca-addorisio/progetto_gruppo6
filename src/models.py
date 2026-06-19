@@ -43,7 +43,7 @@ def get_random_forest_model():
 
 
 def get_xgboost_model():
-    """Return the XGBoost model used as the final selected model."""
+    """Return the XGBoost model used in advanced comparisons and ensembles."""
     return XGBClassifier(
         n_estimators=500,
         learning_rate=0.05,
@@ -85,6 +85,8 @@ def get_voting_ensemble(rf_model=None, xgb_model=None, lgbm_model=None):
 def get_stacking_ensemble(rf_model=None, xgb_model=None, lgbm_model=None):
     """
     Return a stacking ensemble based on Random Forest, XGBoost and LightGBM.
+    
+    When tuned base estimators are provided, they are used directly inside the ensemble.
     """
     estimators = [
         ("rf", rf_model if rf_model is not None else get_random_forest_model()),

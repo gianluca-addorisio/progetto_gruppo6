@@ -1,14 +1,14 @@
 import numpy as np
-import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
+
 
 class OutlierCapper(BaseEstimator, TransformerMixin):
     """
     Classe per la gestione degli outlier tramite il metodo IQR (Interquartile Range).
     Modulo della pipeline modulare di preprocessing.
     """
-    def __init__(self, columns=['area_percentage', 'height_percentage']):
-        self.columns = columns
+    def __init__(self, columns=None):
+        self.columns = columns or ["area_percentage", "height_percentage"]
         self.bounds_ = {}
 
     def fit(self, X, y=None):

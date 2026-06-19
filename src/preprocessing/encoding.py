@@ -3,6 +3,7 @@ import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import OneHotEncoder
 
+
 class FrequencyEncoder(BaseEstimator, TransformerMixin):
     """
     Frequency encoder for high-cardinality categorical identifiers.
@@ -13,8 +14,8 @@ class FrequencyEncoder(BaseEstimator, TransformerMixin):
     Le categorie non viste nel training vengono mappate a 0.0.
     """
 
-    def __init__(self, geo_cols=['geo_level_2_id', 'geo_level_3_id']):
-        self.geo_cols = geo_cols
+    def __init__(self, geo_cols=None):
+        self.geo_cols = geo_cols or ["geo_level_2_id", "geo_level_3_id"]
         self.frequency_maps_: dict[str, pd.Series] = {}
         self.input_features_: list[str] = []
 
@@ -53,14 +54,15 @@ class FrequencyEncoder(BaseEstimator, TransformerMixin):
             return X
         return pd.DataFrame(X)
 
+
 class CategoricalEncoder(BaseEstimator, TransformerMixin):
     """
     Gestisce la trasformazione delle variabili categoriche in variabili numeriche (One-Hot Encoding).
     Esclude automaticamente le colonne destinate al Frequency Encoding.
     """
-    def __init__(self, categorical_cols=None, exclude_cols=['geo_level_2_id', 'geo_level_3_id']):
+    def __init__(self, categorical_cols=None, exclude_cols=None):
         self.categorical_cols = categorical_cols
-        self.exclude_cols = exclude_cols
+        self.exclude_cols = exclude_cols or ["geo_level_2_id", "geo_level_3_id"]
         self.encoder = None
         self.encoded_feature_names_ = None
 

@@ -61,9 +61,8 @@ def add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     Add compact and interpretable engineered features.
 
-    This function creates only the engineered features selected for the final
-    compact feature set. Temporary exploratory transformations are intentionally
-    not created here.
+    The final pruning of candidate or redundant features is handled later by
+    DataCleaner inside the preprocessing pipeline.
     """
     df = df.copy()
 

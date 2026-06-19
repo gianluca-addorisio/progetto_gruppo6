@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 from sklearn.base import clone
@@ -22,13 +20,15 @@ from .featureselector import FeatureSelector
 from .config import (
     FINAL_DO_TUNING,
     FINAL_FEATURE_SELECTION,
-    FINAL_MODEL_NAME,
+    FINAL_FS_METHOD,
+    FINAL_FS_THRESHOLD,
+    FINAL_MAX_FEATURES_TO_HOLD,
     FINAL_SPLIT_STRATEGY,
-    FINAL_SUBMISSION_FILE,
+    FINAL_TUNING_ITER,
+    FINAL_TUNING_SAMPLE_SIZE,
     FINAL_USE_PCA,
     FINAL_USE_SAMPLE_WEIGHT,
     RANDOM_STATE,
-    TARGET_COL,
     VALID_MODEL_NAMES,
 )
 from .hyperparameter_tuning import ModelTuner
@@ -39,23 +39,22 @@ def run_training_pipeline(
     feature_selection: bool = FINAL_FEATURE_SELECTION,
     split_strategy: int = FINAL_SPLIT_STRATEGY,
     use_sample_weight: bool = FINAL_USE_SAMPLE_WEIGHT,
-    fs_method: str = "ctb",
-    fs_threshold: float = 0.005,
-    max_features_to_hold: int = 30,
+    fs_method: str = FINAL_FS_METHOD,
+    fs_threshold: float = FINAL_FS_THRESHOLD,
+    max_features_to_hold: int = FINAL_MAX_FEATURES_TO_HOLD,
     use_pca: bool = FINAL_USE_PCA,
     pca_n_components: int = 40,
     do_tuning: bool = FINAL_DO_TUNING,
-    tuning_iter: int = 50,
-    tuning_sample_size: int = 30000,
+    tuning_iter: int = FINAL_TUNING_ITER,
+    tuning_sample_size: int = FINAL_TUNING_SAMPLE_SIZE,
     models_to_run=None,
 ):
     """
-    Run the training and validation workflow.
+    Run a configurable training and validation workflow.
 
-    The default arguments correspond to the final project configuration:
-    XGBoost-compatible preprocessing, hold-out strategy 2, no feature selection,
-    no PCA and no hyperparameter tuning. Optional tuning, feature selection and
-    cross-validation flows are kept for reproducibility of previous experiments.
+    This function is used for model comparison and ablation experiments. It can
+    reproduce both the simpler baseline configuration and the final experimental
+    setup with tuning and feature selection.
     """
     print("--- 1. Loading Data ---")
     data_loader = DataLoader()
@@ -142,7 +141,7 @@ def run_training_pipeline(
             param_grid = tuner.get_param_grid(name)
 
             if feature_selection:
-                best_pipeline, best_params, best_score = fs_tuner.tune_pipeline(
+                best_pipeline, best_params, _ = fs_tuner.tune_pipeline(
                     temp_pipeline,
                     name,
                     param_grid,
@@ -151,7 +150,7 @@ def run_training_pipeline(
                     n_iter=tuning_iter,
                 )
             else:
-                best_pipeline, best_params, best_score = tuner.tune_pipeline(
+                best_pipeline, best_params, _ = tuner.tune_pipeline(
                     temp_pipeline,
                     name,
                     X_tune,
@@ -266,12 +265,17 @@ def run_training_pipeline(
             y_pred = pipeline.predict(X_val)
             metrics = evaluate_predictions(y_val, y_pred, name)
             results.append(metrics)
+
             fs_result = (
                 f" | FS: {fs_p['max_features_to_hold']} feat"
                 if feature_selection
                 else " | FS: non usata"
             )
-            pca_result = f" | PCA: {pca_n_components} comp." if use_pca else " | PCA: non usata"
+            pca_result = (
+                f" | PCA: {pca_n_components} comp." 
+                if use_pca 
+                else " | PCA: non usata"
+            )
             print(f"    Micro-F1: {metrics['micro_f1']:.4f}{fs_result}{pca_result}")
 
     else:
@@ -289,6 +293,7 @@ def run_training_pipeline(
             )
             pca_label = f" + PCA({pca_n_components})" if use_pca else ""
             print(f"  [Model: {name}] CV Evaluation {fs_label}{pca_label}...")
+
             fold_results = []
             fs_p = config["fs_params"]
             
@@ -339,12 +344,17 @@ def run_training_pipeline(
                 "weighted_f1": np.mean([r["weighted_f1"] for r in fold_results]),
             }
             results.append(avg_metrics)
+            
             fs_result = (
                 f" | FS: {fs_p['max_features_to_hold']} feat"
                 if feature_selection
                 else " | FS: non usata"
             )
-            pca_result = f" | PCA: {pca_n_components} comp." if use_pca else " | PCA: non usata"
+            pca_result = (
+                f" | PCA: {pca_n_components} comp." 
+                if use_pca 
+                else " | PCA: non usata"
+            )
             print(f"    Avg Micro-F1: {avg_metrics['micro_f1']:.4f}{fs_result}{pca_result}")
 
     comparison_df = pd.DataFrame(results)
@@ -352,102 +362,3 @@ def run_training_pipeline(
     print(comparison_df.to_string(index=False))
 
     return comparison_df
-
-
-def _get_model_by_name(model_name: str):
-    """Return the estimator associated with the requested model name."""
-    models = {
-        "RandomForest": get_random_forest_model,
-        "XGBoost": get_xgboost_model,
-        "LightGBM": get_lightgbm_model,
-        "VotingEnsemble": get_voting_ensemble,
-        "StackingEnsemble": get_stacking_ensemble,
-    }
-
-    if model_name not in models:
-        raise ValueError(
-            f"Modello non riconosciuto: {model_name}. "
-            f"Valori ammessi: {list(models)}"
-        )
-
-    return models[model_name]()
-
-
-def generate_final_submission(
-    model_name: str = FINAL_MODEL_NAME,
-    output_path: str | Path = FINAL_SUBMISSION_FILE,
-    feature_selection: bool = FINAL_FEATURE_SELECTION,
-    fs_method: str = "rf",
-    fs_threshold: float = 0.005,
-    max_features_to_hold: int = 30,
-    use_pca: bool = FINAL_USE_PCA,
-    pca_n_components: int = 40,
-):
-    """
-    Train the selected model on the full training set and create a submission.
-
-    Defaults correspond to the final project configuration: XGBoost without
-    feature selection and without PCA.
-    """
-    print("--- Generazione submission finale ---")
-
-    data_loader = DataLoader()
-    X, y = data_loader.load_train_test()
-
-    # Original labels are 1, 2, 3. Models are trained on 0, 1, 2.
-    y = y - 1
-
-    model = _get_model_by_name(model_name)
-
-    fs = (
-        FeatureSelector(
-            fs_method=fs_method,
-            threshold=fs_threshold,
-            max_features_to_hold=max_features_to_hold,
-        )
-        if feature_selection
-        else None
-    )
-
-    pipeline = make_complete_pipeline(
-        model,
-        feature_selector=fs,
-        use_pca=use_pca,
-        pca_n_components=pca_n_components,
-    )
-
-    print(f"Training finale modello: {model_name}")
-    print(f"Feature selection: {'attiva' if feature_selection else 'non usata'}")
-    print(f"PCA: {'attiva' if use_pca else 'non usata'}")
-
-    pipeline.fit(X, y)
-
-    test_values = data_loader.test_values_df.copy()
-    submission = data_loader.submission_format_df.copy()
-
-    predictions = pipeline.predict(test_values)
-
-    # Map predictions back to the competition labels: 1, 2, 3.
-    submission[TARGET_COL] = predictions + 1
-
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    submission.to_csv(output_path, index=False)
-
-    print(f"Submission salvata in: {output_path}")
-    print(submission[TARGET_COL].value_counts().sort_index())
-
-    return submission
-
-
-if __name__ == "__main__":
-    results = run_training_pipeline(
-        feature_selection=FINAL_FEATURE_SELECTION,
-        split_strategy=FINAL_SPLIT_STRATEGY,
-        use_sample_weight=FINAL_USE_SAMPLE_WEIGHT,
-        use_pca=FINAL_USE_PCA,
-        do_tuning=FINAL_DO_TUNING,
-        models_to_run=[FINAL_MODEL_NAME],
-    )
-
-    print(results)

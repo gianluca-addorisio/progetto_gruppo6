@@ -1,6 +1,7 @@
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 
+
 class DataCleaner(BaseEstimator, TransformerMixin):
     """
     Esegue operazioni di pulizia e pruning (rimozione feature) sul dataset.
@@ -61,9 +62,8 @@ class DataCleaner(BaseEstimator, TransformerMixin):
         # 4. Gestione valori nulli (Fallback di sicurezza)
         if X.isnull().values.any():
             for col in X.columns:
-                if X[col].dtype in ['int64', 'float64']:
+                if pd.api.types.is_numeric_dtype(X[col]):
                     X[col] = X[col].fillna(X[col].median())
                 else:
-                    X[col] = X[col].fillna('missing')
-                    
+                    X[col] = X[col].fillna("missing")
         return X

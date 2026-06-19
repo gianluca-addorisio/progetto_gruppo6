@@ -1,6 +1,6 @@
 from scipy.stats import randint, uniform
 from sklearn.model_selection import RandomizedSearchCV
-import pandas as pd
+
 
 class FeatureSelectionTuner:
     """

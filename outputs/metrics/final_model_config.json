@@ -1,0 +1,59 @@
+{
+    "final_model": "StackingEnsemble",
+    "pipeline_file": "/Users/gianlucaaddorisio/Desktop/progetto_gruppo6/models/final_pipeline.joblib",
+    "feature_selection": true,
+    "fs_method": "ctb",
+    "ensemble_fs_source": "LightGBM",
+    "ensemble_fs_params": {
+        "threshold": 0.02984250789732435,
+        "max_features_to_hold": 43
+    },
+    "use_pca": false,
+    "tuning_iter": 15,
+    "tuning_sample_size": 50000,
+    "random_state": 42,
+    "base_models": {
+        "RandomForest": {
+            "best_score": 0.69514,
+            "best_params": {
+                "feature_selector__max_features_to_hold": 26,
+                "feature_selector__threshold": 0.0011531212520707879,
+                "model__max_depth": 20,
+                "model__min_samples_split": 10,
+                "model__n_estimators": 500
+            },
+            "fs_params": {
+                "threshold": 0.0011531212520707879,
+                "max_features_to_hold": 26
+            }
+        },
+        "XGBoost": {
+            "best_score": 0.7054400000000001,
+            "best_params": {
+                "feature_selector__max_features_to_hold": 41,
+                "feature_selector__threshold": 0.019993048585762774,
+                "model__learning_rate": 0.1,
+                "model__max_depth": 10,
+                "model__n_estimators": 300
+            },
+            "fs_params": {
+                "threshold": 0.019993048585762774,
+                "max_features_to_hold": 41
+            }
+        },
+        "LightGBM": {
+            "best_score": 0.70852,
+            "best_params": {
+                "feature_selector__max_features_to_hold": 43,
+                "feature_selector__threshold": 0.02984250789732435,
+                "model__learning_rate": 0.1,
+                "model__n_estimators": 500,
+                "model__num_leaves": 31
+            },
+            "fs_params": {
+                "threshold": 0.02984250789732435,
+                "max_features_to_hold": 43
+            }
+        }
+    }
+}
