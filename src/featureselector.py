@@ -1,3 +1,12 @@
+"""
+Transformer sklearn per la selezione opzionale delle feature.
+
+Il modulo incapsula i metodi di ranking definiti in feature_selection.py e
+mantiene solo le feature più rilevanti secondo soglia minima e numero massimo
+di variabili. Inserire il selettore dentro la pipeline evita data leakage
+durante validazione, cross-validation e tuning.
+"""
+
 from __future__ import annotations
 
 import pandas as pd
@@ -8,11 +17,11 @@ from .feature_selection import FeatureSelection
 
 class FeatureSelector(BaseEstimator, TransformerMixin):
     """
-    Scikit-learn transformer for optional feature selection.
+    Selettore di feature compatibile con le pipeline sklearn.
 
-    The selector wraps the scoring methods implemented in FeatureSelection and
-    keeps the best features according to a minimum score threshold and a maximum
-    number of retained variables.
+    Il selettore calcola uno score per ogni feature, ordina le variabili per
+    importanza e mantiene quelle che superano la soglia specificata, limitando
+    eventualmente il numero massimo di feature mantenute.
     """
 
     SUPPORTED_METHODS = {
@@ -40,7 +49,7 @@ class FeatureSelector(BaseEstimator, TransformerMixin):
         self.scores_ = None
 
     def fit(self, X: pd.DataFrame, y: pd.Series):
-        """Select the most relevant features according to the configured method."""
+        """Seleziona le feature più rilevanti secondo il metodo configurato."""
         if not isinstance(X, pd.DataFrame):
             X = pd.DataFrame(X)
 
@@ -68,7 +77,7 @@ class FeatureSelector(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X: pd.DataFrame):
-        """Reduce the dataset to the features selected during fit."""
+        """Riduce il dataset alle feature selezionate durante il fit."""
         if self.selected_features_ is None:
             raise ValueError("FeatureSelector must be fitted before transform.")
 
@@ -81,7 +90,7 @@ class FeatureSelector(BaseEstimator, TransformerMixin):
         return X[existing_features]
 
     def get_feature_names_out(self, input_features=None):
-        """Return the selected feature names for scikit-learn compatibility."""
+        """Restituisce i nomi delle feature selezionate."""
         return self.selected_features_
 
     def _compute_scores(
@@ -90,7 +99,9 @@ class FeatureSelector(BaseEstimator, TransformerMixin):
         X: pd.DataFrame,
         y: pd.Series,
     ) -> pd.Series:
-        """Compute feature scores using the configured selection method."""
+        """
+        Calcola gli score delle feature utilizzando il metodo di selezione configurato.
+        """
         if self.fs_method not in self.SUPPORTED_METHODS:
             allowed = ", ".join(sorted(self.SUPPORTED_METHODS))
             raise ValueError(

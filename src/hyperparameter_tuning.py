@@ -1,11 +1,24 @@
+"""
+Ottimizzazione degli iperparametri dei modelli.
+
+Il modulo definisce una classe di supporto per eseguire RandomizedSearchCV su
+RandomForest, XGBoost, LightGBM e pipeline sklearn complete. Viene usato sia
+per tuning diretto dei modelli base sia per il tuning delle pipeline durante
+gli esperimenti.
+"""
+
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 
+
 class ModelTuner:
     """
-    Classe per gestire l'ottimizzazione degli iperparametri per diversi modelli.
+    Gestisce l'ottimizzazione degli iperparametri per i principali modelli.
+
+    La classe centralizza le griglie di ricerca e usa StratifiedKFold per
+    mantenere la distribuzione delle classi durante la cross-validation.
     """
 
     def __init__(self, random_state=42, n_splits=5):
@@ -18,6 +31,7 @@ class ModelTuner:
         )
 
     def tune_random_forest(self, X, y, n_iter=20):
+        """Ottimizza gli iperparametri di Random Forest."""
         rf = RandomForestClassifier(random_state=self.random_state)
         param_grid = {
             "n_estimators": [100, 200, 300, 500],
@@ -29,6 +43,7 @@ class ModelTuner:
         return self._run_search(rf, param_grid, X, y, n_iter)
 
     def tune_xgboost(self, X, y, n_iter=20):
+        """Ottimizza gli iperparametri di XGBoost."""
         xgb = XGBClassifier(random_state=self.random_state, eval_metric="mlogloss")
         param_grid = {
             "n_estimators": [100, 300, 500],
@@ -41,6 +56,7 @@ class ModelTuner:
         return self._run_search(xgb, param_grid, X, y, n_iter)
 
     def tune_lightgbm(self, X, y, n_iter=20):
+        """Ottimizza gli iperparametri di LightGBM."""
         lgbm = LGBMClassifier(random_state=self.random_state, verbosity=-1)
         param_grid = {
             "n_estimators": [100, 300, 500],
@@ -54,6 +70,7 @@ class ModelTuner:
         return self._run_search(lgbm, param_grid, X, y, n_iter)
 
     def _run_search(self, estimator, param_grid, X, y, n_iter):
+        """Esegue la RandomizedSearchCV per uno stimatore e una griglia dati."""
         search = RandomizedSearchCV(
             estimator=estimator,
             param_distributions=param_grid,
@@ -90,7 +107,7 @@ class ModelTuner:
         elif model_name == "StackingEnsemble":
             return {
                 "model__final_estimator__C": [0.1, 1.0, 10.0],
-                "model__final_estimator__solver": ['lbfgs', 'liblinear']
+                "model__final_estimator__solver": ["lbfgs", "liblinear"],
             }
         return {}
 

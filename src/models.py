@@ -1,3 +1,11 @@
+"""
+Definizione dei modelli utilizzati nel progetto.
+
+Il modulo raccoglie i costruttori dei baseline model, dei modelli avanzati e
+degli ensemble. Le funzioni restituiscono istanze sklearn compatibili con la
+pipeline modulare e permettono di passare stimatori già tunati agli ensemble.
+"""
+
 from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import RandomForestClassifier, StackingClassifier, VotingClassifier
 from sklearn.linear_model import LogisticRegression
@@ -10,12 +18,12 @@ from .config import RANDOM_STATE
 
 
 def get_dummy_classifier():
-    """Return the majority-class baseline classifier."""
+    """Restituisce il classificatore baseline basato sulla classe maggioritaria."""
     return DummyClassifier(strategy="most_frequent")
 
 
 def get_logistic_regression():
-    """Return the logistic-regression baseline classifier."""
+    """Restituisce il classificatore baseline di regressione logistica."""
     return LogisticRegression(
         max_iter=1000,
         solver="lbfgs",
@@ -24,7 +32,7 @@ def get_logistic_regression():
 
 
 def get_decision_tree():
-    """Return the decision-tree baseline classifier."""
+    """Restituisce il classificatore baseline ad albero di decisione."""
     return DecisionTreeClassifier(
         max_depth=5,
         random_state=RANDOM_STATE,
@@ -32,7 +40,7 @@ def get_decision_tree():
 
 
 def get_random_forest_model():
-    """Return the Random Forest model used in advanced comparisons."""
+    """Restituisce il modello Random Forest utilizzato nelle comparazioni avanzate."""
     return RandomForestClassifier(
         n_estimators=500,
         max_depth=25,
@@ -43,7 +51,10 @@ def get_random_forest_model():
 
 
 def get_xgboost_model():
-    """Return the XGBoost model used as the final selected model."""
+    """
+    Restituisce il modello XGBoost utilizzato nelle comparazioni avanzate
+    e negli ensemble.
+    """
     return XGBClassifier(
         n_estimators=500,
         learning_rate=0.05,
@@ -54,7 +65,9 @@ def get_xgboost_model():
 
 
 def get_lightgbm_model():
-    """Return the LightGBM model used in advanced comparisons."""
+    """
+    Restituisce il modello LightGBM utilizzato nelle comparazioni avanzate.
+    """
     return LGBMClassifier(
         n_estimators=500,
         learning_rate=0.05,
@@ -67,7 +80,10 @@ def get_lightgbm_model():
 
 def get_voting_ensemble(rf_model=None, xgb_model=None, lgbm_model=None):
     """
-    Return a soft-voting ensemble based on Random Forest, XGBoost and LightGBM.
+    Restituisce un ensemble di voto soft basato su Random Forest, XGBoost e LightGBM.
+
+    Quando sono forniti stimatori base già ottimizzati, questi vengono usati
+    direttamente all'interno dell'ensemble.
     """
     estimators = [
         ("rf", rf_model if rf_model is not None else get_random_forest_model()),
@@ -84,7 +100,10 @@ def get_voting_ensemble(rf_model=None, xgb_model=None, lgbm_model=None):
 
 def get_stacking_ensemble(rf_model=None, xgb_model=None, lgbm_model=None):
     """
-    Return a stacking ensemble based on Random Forest, XGBoost and LightGBM.
+    Restituisce un ensemble di stacking basato su Random Forest, XGBoost e LightGBM.
+
+    Quando sono forniti stimatori base già ottimizzati, questi vengono usati
+    direttamente all'interno dell'ensemble.
     """
     estimators = [
         ("rf", rf_model if rf_model is not None else get_random_forest_model()),

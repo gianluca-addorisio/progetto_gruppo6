@@ -1,3 +1,13 @@
+"""
+Utility per il feature engineering.
+
+Il modulo raccoglie gruppi semantici di feature e costruisce variabili
+aggregate compatte a partire dagli indicatori strutturali e di uso secondario.
+Le feature candidate o ridondanti vengono poi selezionate o rimosse nella
+pipeline di preprocessing, evitando di mescolare trasformazioni esplorative e
+pulizia finale.
+"""
+
 from __future__ import annotations
 
 import pandas as pd
@@ -45,12 +55,12 @@ ENGINEERED_STRUCTURE_FEATURES = [
 
 
 def get_superstructure_features(df: pd.DataFrame) -> list[str]:
-    """Return binary features related to structural materials."""
+    """Restituisce le feature binarie relative ai materiali strutturali."""
     return [col for col in df.columns if col.startswith("has_superstructure_")]
 
 
 def get_secondary_use_features(df: pd.DataFrame) -> list[str]:
-    """Return binary features related to secondary building use."""
+    """Restituisce le feature binarie relative all'uso secondario degli edifici."""
     return [
         col for col in df.columns
         if col.startswith("has_secondary_use_") and col != "has_secondary_use"
@@ -59,14 +69,15 @@ def get_secondary_use_features(df: pd.DataFrame) -> list[str]:
 
 def add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Add compact and interpretable engineered features.
+    Aggiunge feature ingegnerizzate compatte e interpretabili.
 
-    This function creates only the engineered features selected for the final
-    compact feature set. Temporary exploratory transformations are intentionally
-    not created here.
+    La rimozione finale di feature candidate o ridondanti viene gestita
+    successivamente dal DataCleaner nella pipeline di preprocessing.
     """
     df = df.copy()
 
+    # Le colonne binarie originali vengono aggregate in contatori e flag
+    # più compatti, poi rimosse dal DataCleaner per ridurre ridondanza.
     superstructure_cols = get_superstructure_features(df)
     secondary_use_cols = get_secondary_use_features(df)
 
@@ -92,6 +103,8 @@ def add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
             df[existing_engineered_cols].sum(axis=1) > 0
         ).astype(int)
 
+    # Feature candidata: viene costruita qui ma rimossa dal DataCleaner
+    # nella configurazione finale perché non mantenuta nel set conclusivo.
     if {"area_percentage", "height_percentage"}.issubset(df.columns):
         df["building_volume_proxy"] = (
             df["area_percentage"] * df["height_percentage"]
@@ -101,7 +114,7 @@ def add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def get_feature_group_summary(df: pd.DataFrame) -> pd.DataFrame:
-    """Return a compact summary of the main feature groups."""
+    """Restituisce un riepilogo compatto dei principali gruppi di feature."""
     rows = [
         {
             "group": "geographical",

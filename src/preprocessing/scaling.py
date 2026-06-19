@@ -1,6 +1,6 @@
-import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import StandardScaler
+
 
 class NumericalScaler(BaseEstimator, TransformerMixin):
     """
@@ -25,7 +25,7 @@ class NumericalScaler(BaseEstimator, TransformerMixin):
         if self.numeric_cols is None:
             # Selezioniamo automaticamente le colonne numeriche (int e float)
             # Escludiamo quelle che sembrano essere binarie (0 e 1) per non rovinarle
-            all_numeric = X.select_dtypes(include=['int64', 'float64', 'int32']).columns.tolist()
+            all_numeric = X.select_dtypes(include="number").columns.tolist()
             self.numeric_cols_ = [
                 col for col in all_numeric 
                 if not X[col].isin([0, 1]).all() # Esclude le flag binarie (has_superstructure_...)

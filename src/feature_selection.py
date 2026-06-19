@@ -1,3 +1,12 @@
+"""
+Metodi di ranking, selezione ed estrazione delle feature.
+
+Il modulo raccoglie tecniche diverse per valutare la rilevanza delle variabili:
+correlazione, Chi-quadrato, mutual information, importanze da modelli ad alberi,
+ReliefF, RFE, SFS, PCA e autoencoder. Queste funzioni sono usate soprattutto
+per analisi esplorative e come backend del FeatureSelector.
+"""
+
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
@@ -6,6 +15,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from .config import FIGURES_DIR, RANDOM_STATE
 from .utils import plot_feature_ranking
+
 
 class FeatureSelection:
     """

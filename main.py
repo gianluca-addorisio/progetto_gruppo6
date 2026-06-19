@@ -8,7 +8,8 @@ from typing import Iterable
 import pandas as pd
 
 from src.config import (
-    FINAL_MODEL_NAME,
+    FINAL_MODEL_CONFIG_FILE,
+    FINAL_PIPELINE_FILE,
     FINAL_SPLIT_STRATEGY,
     FINAL_SUBMISSION_FILE,
     PROJECT_ROOT,
@@ -19,13 +20,12 @@ from src.config import (
     TRAIN_VALUES_FILE,
     VALID_MODEL_NAMES,
 )
-from src.pipeline_training_model import (
-    generate_final_submission,
-    run_training_pipeline,
+from src.final_model import (
+    create_submission_from_pipeline,
+    generate_submission_from_saved_model,
+    train_final_model,
 )
-
-
-
+from src.pipeline_training_model import run_training_pipeline
 
 def _check_required_data_files() -> None:
     """Verify that the raw competition files are available before running."""
@@ -84,7 +84,7 @@ def _save_metrics(results: pd.DataFrame, output_path: Path | None) -> None:
 
 
 def evaluate_final(args: argparse.Namespace) -> None:
-    """Evaluate the final candidate model on the validation split."""
+    """Run a quick validation of the selected model without tuning."""
     _check_required_data_files()
 
     results = run_training_pipeline(
@@ -96,14 +96,14 @@ def evaluate_final(args: argparse.Namespace) -> None:
         models_to_run=[args.model],
     )
 
-    print("\nFinal-model validation results:")
+    print("\nQuick validation results:")
     print(results.to_string(index=False))
 
     _save_metrics(results, args.output)
 
 
 def compare_models(args: argparse.Namespace) -> None:
-    """Compare the selected advanced models with the final preprocessing setup."""
+    """Compare selected models using the configurable validation pipeline."""
     _check_required_data_files()
 
     models_to_run = _parse_models(args.models)
@@ -123,18 +123,40 @@ def compare_models(args: argparse.Namespace) -> None:
     _save_metrics(results, args.output)
 
 
+def train_final(args: argparse.Namespace) -> None:
+    """Train and serialize the final tuned StackingEnsemble pipeline."""
+    _check_required_data_files()
+
+    pipeline, metadata = train_final_model(
+        model_output_path=args.model_output,
+        config_output_path=args.config_output,
+    )
+
+    print("\nFinal model training completed.")
+    print(f"Final model: {metadata['final_model']}")
+    print(f"Pipeline saved to: {args.model_output}")
+    print(f"Metadata saved to: {args.config_output}")
+
+
 def make_submission(args: argparse.Namespace) -> None:
-    """Train the selected model on the full training set and generate a submission."""
+    """Generate a competition submission from a saved or newly trained final model."""
     _check_required_data_files()
 
     output_path = Path(args.output)
 
-    submission = generate_final_submission(
-        model_name=args.model,
-        output_path=output_path,
-        feature_selection=False,
-        use_pca=False,
-    )
+    if args.from_saved_model:
+        submission = generate_submission_from_saved_model(
+            model_path=args.model_path,
+            output_path=output_path,
+        )
+    else:
+        final_pipeline, _ = train_final_model(
+            model_output_path=args.model_path,
+        )
+        submission = create_submission_from_pipeline(
+            pipeline=final_pipeline,
+            output_path=output_path,
+        )
 
     print("\nSubmission preview:")
     print(submission.head().to_string(index=False))
@@ -147,7 +169,9 @@ def build_parser() -> argparse.ArgumentParser:
         prog="main.py",
         description=(
             "FIA Earthquake Damage Predictor. "
-            "Default configuration: XGBoost, no feature selection, no PCA, no tuning."
+            "Final configuration: tuned StackingEnsemble with feature selection. "
+            "Use train-final to fit and save the final model, then make-submission "
+            "--from-saved-model to regenerate the submission without retraining."
         ),
     )
 
@@ -158,13 +182,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     evaluate_parser = subparsers.add_parser(
         "evaluate-final",
-        help="Evaluate the final candidate model on the validation split.",
+        help="Run a quick validation of the selected model without tuning.",
     )
     evaluate_parser.add_argument(
         "--model",
         choices=VALID_MODEL_NAMES,
-        default=FINAL_MODEL_NAME,
-        help=f"Model to evaluate. Default: {FINAL_MODEL_NAME}.",
+        default="XGBoost",
+        help="Model to evaluate without tuning. Default: XGBoost.",
     )
     evaluate_parser.add_argument(
         "--split-strategy",
@@ -179,10 +203,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional CSV path where validation metrics will be saved.",
     )
     evaluate_parser.set_defaults(func=evaluate_final)
+    train_parser = subparsers.add_parser(
+        "train-final",
+        help="Train and save the final tuned StackingEnsemble pipeline.",
+    )
+    train_parser.add_argument(
+        "--model-output",
+        type=Path,
+        default=FINAL_PIPELINE_FILE,
+        help=f"Path where the fitted pipeline will be saved. Default: {_format_path_for_help(FINAL_PIPELINE_FILE)}.",
+    )
+    train_parser.add_argument(
+        "--config-output",
+        type=Path,
+        default=FINAL_MODEL_CONFIG_FILE,
+        help=f"Path where final model metadata will be saved. Default: {_format_path_for_help(FINAL_MODEL_CONFIG_FILE)}.",
+    )
+    train_parser.set_defaults(func=train_final)
 
     compare_parser = subparsers.add_parser(
         "compare-models",
-        help="Compare advanced models using the final preprocessing setup.",
+        help="Compare selected models using the configurable validation pipeline.",
     )
     compare_parser.add_argument(
         "--models",
@@ -209,13 +250,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     submission_parser = subparsers.add_parser(
         "make-submission",
-        help="Train on the full training set and generate a competition submission.",
+        help="Generate a competition submission from the final model.",
     )
     submission_parser.add_argument(
-        "--model",
-        choices=VALID_MODEL_NAMES,
-        default=FINAL_MODEL_NAME,
-        help=f"Model used for final training. Default: {FINAL_MODEL_NAME}.",
+        "--from-saved-model",
+        action="store_true",
+        help="Load the saved final pipeline instead of retraining it.",
+    )
+    submission_parser.add_argument(
+        "--model-path",
+        type=Path,
+        default=FINAL_PIPELINE_FILE,
+        help=f"Saved final pipeline path. Default: {_format_path_for_help(FINAL_PIPELINE_FILE)}.",
     )
     submission_parser.add_argument(
         "--output",
