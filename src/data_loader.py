@@ -1,3 +1,13 @@
+"""
+Utility per il caricamento dei dati e la costruzione degli split.
+
+Il modulo legge i file originali della competizione, costruisce il dataset di
+training completo tramite merge tra feature e target, e fornisce diverse
+strategie di validazione. Lo schema grezzo dei dati viene mantenuto fino alla
+fase di preprocessing, così la stessa logica può essere usata sia in validazione
+sia nella generazione della submission finale.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -51,6 +61,7 @@ def load_raw_data():
 def load_full_train(train_values: pd.DataFrame, train_labels: pd.DataFrame) -> pd.DataFrame:
     """Crea il dataset di training completo unendo feature e target."""
 
+    # Il validate="one_to_one" evita merge ambigui tra feature e label.
     train = train_values.merge(
         train_labels,
         on=ID_COL,

@@ -1,3 +1,12 @@
+"""
+Utility per la valutazione dei modelli.
+
+Il modulo raccoglie le funzioni usate per calcolare le metriche principali del
+progetto e per salvare report diagnostici. La metrica di riferimento è la
+micro-F1, coerente con la valutazione della competizione, mentre macro-F1 e
+weighted-F1 vengono mantenute per analisi comparative più complete.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -14,10 +23,10 @@ from sklearn.metrics import (
 
 def evaluate_predictions(y_true, y_pred, model_name: str) -> dict[str, object]:
     """
-    Compute the main metrics used in the project.
+    Calcola le principali metriche di valutazione del progetto.
 
-    The official reference metric for Richter's Predictor is micro-F1.
-    Macro-F1 and weighted-F1 are also saved to make model comparison easier.
+    La micro-F1 è la metrica ufficiale di riferimento. Macro-F1 e weighted-F1
+    vengono salvate per rendere più informativo il confronto tra modelli.
     """
     return {
         "model": model_name,
@@ -28,7 +37,7 @@ def evaluate_predictions(y_true, y_pred, model_name: str) -> dict[str, object]:
 
 
 def get_classification_report_df(y_true, y_pred) -> pd.DataFrame:
-    """Return the classification report as a DataFrame."""
+    """Restituisce il classification report come DataFrame."""
     report = classification_report(
         y_true,
         y_pred,
@@ -44,7 +53,7 @@ def save_confusion_matrix(
     model_name: str,
     output_path: str | Path,
 ) -> None:
-    """Save a confusion matrix figure to disk."""
+    """Salva su disco la matrice di confusione del modello."""
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 

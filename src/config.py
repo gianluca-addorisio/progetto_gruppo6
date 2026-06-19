@@ -1,3 +1,11 @@
+"""
+Configurazione centralizzata del progetto.
+
+Questo modulo definisce percorsi dei dati, directory di output, nomi delle
+colonne principali, seed di riproducibilità e parametri della configurazione
+finale del modello. Centralizzare questi valori evita duplicazioni e mantiene
+allineati pipeline sperimentale, training finale e generazione della submission.
+"""
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]

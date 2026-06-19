@@ -1,11 +1,22 @@
+"""
+Ottimizzazione congiunta di feature selection e modello.
+
+Il modulo definisce una classe di supporto per eseguire RandomizedSearchCV su
+pipeline che includono sia uno step di feature selection sia uno stimatore
+finale. Viene usato quando si vuole ottimizzare insieme il numero di feature
+mantenute, la soglia di selezione e gli iperparametri del modello.
+"""
+
 from scipy.stats import randint, uniform
 from sklearn.model_selection import RandomizedSearchCV
 
 
 class FeatureSelectionTuner:
     """
-    Classe semplificata per l'ottimizzazione della Feature Selection.
-    Usa il nome fisso 'feature_selector' per coerenza con la pipeline.
+    Gestisce il tuning congiunto di feature selection e modello.
+
+    Il metodo di selezione viene fissato nella pipeline, mentre RandomizedSearchCV
+    ottimizza soglia, numero massimo di feature mantenute e parametri del modello.
     """
 
     def __init__(self, random_state=42, n_splits=5):
@@ -14,30 +25,31 @@ class FeatureSelectionTuner:
 
     def tune_pipeline(self, pipeline, model_name, param_grid_model, X, y, n_iter=30):
         """
-        Ottimizzazione congiunta di Feature Selection e Modello.
-        Mantiene fisso il metodo di FS scelto dall'utente e ne ottimizza i parametri.
+        Ottimizza congiuntamente feature selection e modello finale della pipeline.
+
+        La griglia usa il prefisso feature_selector__ per i parametri del selettore
+        e model__ per i parametri dello stimatore finale.
         """
         # Griglia per la Feature Selection (usando il nome fisso 'feature_selector')
         # Rimuoviamo 'fs_method' dalla griglia così rimane quello impostato nella pipeline
         param_grid = {
-            'feature_selector__max_features_to_hold': randint(15, 45),
-            'feature_selector__threshold': uniform(0, 0.05)
+            "feature_selector__max_features_to_hold": randint(15, 45),
+            "feature_selector__threshold": uniform(0, 0.05),
         }
-        
-        # Aggiungiamo i parametri del modello (che usano il prefisso 'model__')
+
+        # Aggiungiamo i parametri del modello, che usano il prefisso model__.
         param_grid.update(param_grid_model)
 
         search = RandomizedSearchCV(
-            pipeline, 
-            param_distributions=param_grid, 
-            n_iter=n_iter, 
-            cv=self.n_splits, 
-            scoring='f1_micro',
-
+            pipeline,
+            param_distributions=param_grid,
+            n_iter=n_iter,
+            cv=self.n_splits,
+            scoring="f1_micro",
             random_state=self.random_state,
             n_jobs=-1,
-            verbose=1
+            verbose=1,
         )
         search.fit(X, y)
-        
+
         return search.best_estimator_, search.best_params_, search.best_score_

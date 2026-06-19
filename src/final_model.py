@@ -1,3 +1,12 @@
+"""
+Training finale e generazione della submission.
+
+Questo modulo contiene il workflow conclusivo del progetto: tuning dei modelli
+base, costruzione dello StackingEnsemble finale, applicazione della feature
+selection, fit sul training set completo, salvataggio della pipeline finale e
+generazione della submission. È separato dalla pipeline sperimentale per evitare
+side effect durante confronti, ablation study e validazione interna.
+"""
 from __future__ import annotations
 
 import json
@@ -35,7 +44,7 @@ from .preprocessing.pipeline import make_complete_pipeline
 
 
 def _json_ready(value):
-    """Convert numpy values into JSON-serializable Python values."""
+    """Converte valori numpy in oggetti Python serializzabili in JSON."""
     if isinstance(value, dict):
         return {key: _json_ready(val) for key, val in value.items()}
     if isinstance(value, list):
@@ -62,13 +71,18 @@ def train_final_model(
     tuning_sample_size: int = FINAL_TUNING_SAMPLE_SIZE,
 ):
     """
-    Train and save the final tuned StackingEnsemble pipeline.
+    Addestra e salva la pipeline finale basata su StackingEnsemble tunato.
 
-    The final model is built by tuning RandomForest, XGBoost and LightGBM first,
-    then using the tuned base estimators inside the StackingEnsemble. If feature
-    selection is enabled, the ensemble uses LightGBM's tuned feature-selection
-    parameters, matching the final experimental setup.
+    Il modello finale viene costruito ottimizzando prima RandomForest, XGBoost
+    e LightGBM, per poi usare questi stimatori come base dello StackingEnsemble.
+    Se la feature selection è attiva, vengono riutilizzati i parametri ottimizzati
+    durante il tuning per mantenere coerenza con la configurazione sperimentale
+    finale.
     """
+
+    # Le label originali della competizione sono 1, 2 e 3. Alcuni modelli,
+    # in particolare XGBoost, lavorano più stabilmente con classi indicizzate
+    # da 0; per questo il target viene temporaneamente ricodificato.
     print("--- Training final tuned StackingEnsemble ---")
 
     data_loader = DataLoader()
@@ -78,6 +92,9 @@ def train_final_model(
     tuner = ModelTuner(random_state=RANDOM_STATE)
     fs_tuner = FeatureSelectionTuner(random_state=RANDOM_STATE)
 
+    # I tre modelli base vengono ottimizzati separatamente prima di essere
+    # inseriti nello StackingEnsemble finale. In questo modo lo stacking non
+    # combina stimatori default, ma versioni già adattate al problema.
     base_configs = {
         "RandomForest": {
             "model": get_random_forest_model(),
@@ -176,6 +193,8 @@ def train_final_model(
         if feature_selection:
             print(f"FS params: {base_configs[name]['fs_params']}")
 
+    # I parametri di feature selection ricavati dal tuning vengono riutilizzati
+    # per costruire una configurazione finale coerente e non scelta manualmente.
     ensemble_fs_params = (
         base_configs["LightGBM"]["fs_params"]
         if feature_selection
@@ -201,6 +220,8 @@ def train_final_model(
         else None
     )
 
+    # Dopo la selezione della configurazione finale, la pipeline viene fittata
+    # su tutto il training set disponibile prima della submission.
     final_pipeline = make_complete_pipeline(
         final_model,
         feature_selector=final_feature_selector,
@@ -217,6 +238,8 @@ def train_final_model(
     model_output_path.parent.mkdir(parents=True, exist_ok=True)
     config_output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Il salvataggio della pipeline completa permette di rigenerare la
+    # submission senza ripetere tuning e training finale.
     joblib.dump(final_pipeline, model_output_path)
 
     metadata = {
@@ -246,7 +269,15 @@ def create_submission_from_pipeline(
     pipeline,
     output_path: str | Path = FINAL_SUBMISSION_FILE,
 ):
-    """Create a DrivenData submission from an already fitted pipeline."""
+    """
+    Genera il file di submission a partire da una pipeline già addestrata.
+
+    La funzione applica al test set la stessa pipeline usata nel training finale
+    e salva le predizioni nel formato richiesto dalla competizione.
+    """
+
+    # La submission usa la stessa pipeline fittata sul training set completo,
+    # garantendo coerenza tra preprocessing, feature selection e modello.
     data_loader = DataLoader()
     data_loader.load_train_test()
 
@@ -270,7 +301,15 @@ def generate_submission_from_saved_model(
     model_path: str | Path = FINAL_PIPELINE_FILE,
     output_path: str | Path = FINAL_SUBMISSION_FILE,
 ):
-    """Generate a submission from the saved final pipeline, without retraining."""
+    """
+    Carica una pipeline finale salvata e rigenera la submission.
+
+    Questa funzione permette di separare inferenza e training, evitando di
+    rieseguire tuning e fit quando il modello finale è già disponibile su disco.
+    """
+
+    # Questa funzione separa inferenza e training: se il modello finale è già
+    # salvato, la submission può essere rigenerata senza rifare il fit.
     model_path = Path(model_path)
 
     if not model_path.exists():
@@ -286,7 +325,6 @@ def generate_submission_from_saved_model(
         pipeline=pipeline,
         output_path=output_path,
     )
-
 
 if __name__ == "__main__":
     train_final_model()
