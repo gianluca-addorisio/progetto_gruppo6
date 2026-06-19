@@ -1,16 +1,18 @@
-# FIA Earthquake Damage Predictor
+# Richter's Predictor: Modeling Earthquake Damage
 
 Progetto finale del corso di **Fondamenti di Intelligenza Artificiale**.
 
-L'obiettivo del progetto è predire il livello di danno subito dagli edifici in seguito al terremoto del Nepal del 2015, utilizzando il dataset della competizione DrivenData:
+Il progetto utilizza il dataset della competizione DrivenData **Richter's Predictor: Modeling Earthquake Damage**, relativo agli edifici colpiti dal terremoto del Nepal del 2015.
 
-**Richter's Predictor: Modeling Earthquake Damage**
+L'obiettivo è sviluppare una pipeline di Machine Learning per stimare il livello di danno subito dagli edifici a partire da informazioni strutturali, geografiche e d'uso.
+
+La versione qui documentata corrisponde alla versione finale di consegna del progetto.
 
 ---
 
-## Obiettivo
+## 1. Obiettivo del progetto
 
-Il progetto consiste nello sviluppo di una pipeline di Machine Learning per classificare gli edifici in base al livello di danno subito.
+Il task affrontato è un problema di **classificazione multiclasse**.
 
 La variabile target è:
 
@@ -18,40 +20,37 @@ La variabile target è:
 damage_grade
 ```
 
-Le classi sono:
+Le classi previste sono:
 
-```text
-1 = danno basso
-2 = danno medio
-3 = danno elevato
-```
+| Classe | Significato   |
+| -----: | ------------- |
+|      1 | danno basso   |
+|      2 | danno medio   |
+|      3 | danno elevato |
 
-La metrica principale di valutazione è:
+La metrica principale è la **micro-F1**, coerentemente con la metrica ufficiale della competizione. La micro-F1 aggrega globalmente veri positivi, falsi positivi e falsi negativi sulle tre classi, ed è quindi adatta a valutare la performance complessiva del classificatore.
 
-```text
-micro-F1 score
-```
+Sono inoltre considerate come metriche di supporto:
 
-Metriche di supporto:
+| Metrica       | Ruolo                                                                   |
+| ------------- | ----------------------------------------------------------------------- |
+| `micro-F1`    | metrica principale per confronto e scelta del modello                   |
+| `macro-F1`    | misura la performance media sulle classi, senza pesare per la frequenza |
+| `weighted-F1` | misura la performance media pesata per la numerosità delle classi       |
 
-```text
-macro-F1
-weighted-F1
-```
-
-La scelta del modello finale è guidata principalmente dalla micro-F1, coerentemente con la metrica ufficiale della competizione.
+La scelta finale tiene conto della micro-F1 interna, della coerenza metodologica della pipeline e del risultato ottenuto sulla public leaderboard.
 
 ---
 
-## Dataset
+## 2. Dataset
 
-I dati originali devono essere inseriti nella cartella:
+I file originali della competizione devono essere posizionati nella cartella:
 
 ```text
 data/raw/
 ```
 
-Struttura attesa:
+La struttura richiesta è:
 
 ```text
 data/raw/
@@ -63,214 +62,200 @@ data/raw/
 
 Descrizione dei file:
 
-* `train_values.csv`: feature degli edifici del training set;
-* `train_labels.csv`: target `damage_grade`;
-* `test_values.csv`: feature degli edifici del test set;
-* `submission_format.csv`: formato richiesto per la submission finale.
+| File                    | Contenuto                                       |
+| ----------------------- | ----------------------------------------------- |
+| `train_values.csv`      | feature degli edifici del training set          |
+| `train_labels.csv`      | target `damage_grade` associato al training set |
+| `test_values.csv`       | feature degli edifici del test set              |
+| `submission_format.csv` | formato richiesto per la submission finale      |
 
-I file originali non devono essere modificati direttamente.
-
-La pipeline ufficiale lavora a partire dai dati raw e applica preprocessing, feature engineering, eventuale feature selection ed eventuale PCA direttamente tramite pipeline scikit-learn, senza richiedere dataset intermedi salvati su disco.
+I dati raw non vengono modificati direttamente. La pipeline carica i file originali, costruisce il dataset di training completo tramite merge su `building_id` e applica preprocessing, feature engineering, feature selection opzionale, tuning e modellazione tramite codice riutilizzabile in `src/`.
 
 ---
 
-## Struttura del repository
+## 3. Struttura del repository
 
 ```text
 .
 ├── data/
-│   └── raw/                  # dati originali
-├── docs/                     # documentazione metodologica e decision log
-├── notebooks/                # notebook esplorativi e sperimentali
+│   └── raw/
+├── docs/
+│   └── decision_log.md
+├── models/
+│   └── final_pipeline.joblib        # generato localmente, non versionato
+├── notebooks/
 ├── outputs/
-│   ├── figures/              # figure generate da analisi e feature selection
-│   ├── metrics/              # risultati e confronti metrici
-│   └── submissions/          # submission finali
-├── src/                      # codice stabile e riutilizzabile
-│   ├── preprocessing/        # pipeline modulare ufficiale
+│   ├── figures/
+│   ├── metrics/
+│   └── submissions/
+├── src/
+│   ├── preprocessing/
 │   ├── config.py
 │   ├── data_loader.py
 │   ├── evaluation.py
 │   ├── features.py
 │   ├── feature_selection.py
 │   ├── featureselector.py
+│   ├── final_model.py
 │   ├── hyperparameter_tuning.py
 │   ├── hyperparameter_tuning_feature_selection.py
 │   ├── models.py
 │   ├── pipeline_training_model.py
 │   └── utils.py
-├── main.py                   # entry point CLI
+├── main.py
 ├── requirements.txt
 ├── README.md
 └── LICENSE
 ```
 
-La pipeline ufficiale di preprocessing si trova in:
+| Percorso                                      | Ruolo                                                        |
+| --------------------------------------------- | ------------------------------------------------------------ |
+| `data/raw/`                                   | dati originali della competizione                            |
+| `src/preprocessing/`                          | pipeline modulare di preprocessing                           |
+| `src/config.py`                               | path, costanti e configurazione finale                       |
+| `src/data_loader.py`                          | caricamento dati, merge e split                              |
+| `src/features.py`                             | feature engineering compatto                                 |
+| `src/featureselector.py`                      | transformer sklearn per feature selection leak-safe          |
+| `src/feature_selection.py`                    | metodi di ranking e scoring delle feature                    |
+| `src/models.py`                               | baseline, modelli avanzati ed ensemble                       |
+| `src/pipeline_training_model.py`              | esperimenti, validazione interna e model comparison          |
+| `src/final_model.py`                          | training finale, salvataggio pipeline e generazione submission |
+| `src/evaluation.py`                           | metriche, classification report e confusion matrix           |
+| `outputs/metrics/`                            | risultati e confronti tra modelli                            |
+| `outputs/submissions/`                        | file di submission finale                                    |
+| `models/final_pipeline.joblib`                | pipeline finale salvata dopo `train-final`                   |
+| `notebooks/`                                  | analisi esplorative e sperimentali                           |
+| `docs/decision_log.md`                        | razionale dettagliato delle decisioni metodologiche          |
 
-```text
-src/preprocessing/
-```
-
-La configurazione finale del progetto è centralizzata in:
-
-```text
-src/config.py
-```
-
----
-
-## File principali
-
-```text
-src/config.py
-```
-
-Contiene path, colonne principali, random seed e configurazione finale del progetto.
-
-```text
-src/data_loader.py
-```
-
-Gestisce caricamento dati e split train-validation.
-
-```text
-src/features.py
-```
-
-Contiene il feature engineering compatto.
-
-```text
-src/preprocessing/
-```
-
-Contiene la pipeline modulare ufficiale di preprocessing.
-
-```text
-src/featureselector.py
-```
-
-Definisce un transformer sklearn-compatible per feature selection opzionale.
-
-```text
-src/feature_selection.py
-```
-
-Contiene metodi di scoring e ranking delle feature.
-
-```text
-src/models.py
-```
-
-Definisce baseline, modelli avanzati ed ensemble.
-
-```text
-src/pipeline_training_model.py
-```
-
-Contiene la training pipeline principale e la generazione della submission finale.
-
-```text
-main.py
-```
-
-Espone i principali comandi operativi da terminale.
+La logica stabile del progetto si trova in `src/`. I notebook documentano il percorso analitico e sperimentale, mentre l'esecuzione finale avviene tramite `main.py`.
 
 ---
 
-## Pipeline ufficiale
+## 4. Pipeline ufficiale
 
-La pipeline ufficiale lavora sui dati raw e costruisce internamente il seguente flusso:
+La pipeline finale segue due flussi distinti.
+
+Flusso sperimentale e di validazione:
 
 ```text
 raw data
-→ split train/validation
+→ train/validation split
 → preprocessing
-→ eventuale FeatureSelector
+→ eventuale feature selection
 → eventuale PCA
 → modello
-→ metriche
+→ metriche interne
 ```
 
-Questa struttura riduce il rischio di data leakage: preprocessing, feature selection e PCA vengono fittati solo sul training set o sul fold di training durante la cross-validation.
-
-La pipeline modulare è composta dai seguenti step:
-
-1. `feature_engineering`: crea feature aggregate tramite `src/features.py`;
-2. `DataCleaner`: rimuove identificativi, target accidentale, feature escluse e feature originali compresse;
-3. `AgeHandler`: gestisce il valore speciale `age = 995`;
-4. `FrequencyEncoder`: applica frequency encoding a `geo_level_2_id` e `geo_level_3_id`;
-5. `CategoricalEncoder`: applica one-hot encoding alle variabili categoriche e a `geo_level_1_id`;
-6. `NumericalScaler`: applicato solo quando richiesto, per esempio con PCA;
-7. `FeatureSelector`: opzionale;
-8. `PCA`: opzionale;
-9. modello finale.
-
-Funzioni principali:
+Flusso finale di training e submission:
 
 ```text
-get_preprocessing_steps()
-get_preprocessing_pipeline()
-make_complete_pipeline()
-run_training_pipeline()
-generate_final_submission()
+raw data
+→ preprocessing
+→ CatBoost-based FeatureSelector
+→ tuning dei modelli base
+→ StackingEnsemble
+→ fit sul training set completo
+→ salvataggio pipeline
+→ submission
 ```
+
+```mermaid
+flowchart LR
+    A[Raw data] --> B[Feature engineering]
+    B --> C[Preprocessing]
+    C --> D[FeatureSelector ctb]
+    D --> E[Tuning RF, XGBoost, LightGBM]
+    E --> F[StackingEnsemble]
+    F --> G[Fit su training completo]
+    G --> H[Saved pipeline]
+    H --> I[Final submission]
+
+    C -. esperimenti .-> J[PCA]
+    C -. esperimenti .-> K[Sample weighting]
+```
+
+Tutte le trasformazioni principali sono compatibili con `scikit-learn` e vengono integrate nella pipeline. Questo riduce il rischio di **data leakage**, perché preprocessing, feature selection e PCA vengono fittati solo sul training set o sul fold di training durante la validazione.
+
+| Step                | Componente                   | Ruolo                                                        |
+| ------------------- | ---------------------------- | ------------------------------------------------------------ |
+| Feature engineering | `src/features.py`            | crea feature aggregate                                       |
+| Data cleaning       | `DataCleaner`                | rimuove identificativi, target accidentali e feature escluse |
+| Age handling        | `AgeHandler`                 | gestisce il valore speciale `age = 995`                      |
+| Geographic encoding | `FrequencyEncoder` / one-hot | codifica variabili geografiche                               |
+| Feature selection   | `FeatureSelector`            | seleziona feature tramite ranking CatBoost                   |
+| Modeling            | `StackingEnsemble`           | combina RandomForest, XGBoost e LightGBM                     |
+| Evaluation          | `src/evaluation.py`          | calcola micro-F1, macro-F1 e weighted-F1                     |
 
 ---
 
-## Configurazione finale
+## 5. Configurazione finale
 
-La configurazione finale attualmente adottata è:
+La configurazione finale è centralizzata in `src/config.py`.
 
-```text
-Modello: XGBoost
-Split strategy: 2
-Feature selection: no
-PCA: no
-Tuning: no
-Sample weighting: no
-```
+| Parametro             | Valore finale       |
+| --------------------- | ------------------- |
+| Modello finale        | `StackingEnsemble`  |
+| Split strategy        | `4`                 |
+| Feature selection     | attiva              |
+| Metodo FS             | `ctb`               |
+| Soglia FS             | `0.005`             |
+| Numero massimo feature | `30`               |
+| PCA                   | disattivata         |
+| Sample weighting      | disattivato         |
+| Hyperparameter tuning | attivo              |
+| Tuning iterations     | `15`                |
+| Tuning sample size    | `50000`             |
 
-Questa configurazione è definita in `src/config.py` tramite:
+Configurazione principale:
 
-```text
-FINAL_MODEL_NAME = "XGBoost"
-FINAL_SPLIT_STRATEGY = 2
-FINAL_FEATURE_SELECTION = False
+```python
+FINAL_MODEL_NAME = "StackingEnsemble"
+FINAL_SPLIT_STRATEGY = 4
+FINAL_FEATURE_SELECTION = True
+FINAL_FS_METHOD = "ctb"
+FINAL_FS_THRESHOLD = 0.005
+FINAL_MAX_FEATURES_TO_HOLD = 30
 FINAL_USE_SAMPLE_WEIGHT = False
 FINAL_USE_PCA = False
-FINAL_DO_TUNING = False
+FINAL_DO_TUNING = True
+FINAL_TUNING_ITER = 15
+FINAL_TUNING_SAMPLE_SIZE = 50000
 ```
+
+La configurazione finale usa uno `StackingEnsemble` costruito a partire da RandomForest, XGBoost e LightGBM. Prima della costruzione dello stacking, i modelli base vengono ottimizzati tramite `RandomizedSearchCV`. La feature selection è integrata nella pipeline tramite `FeatureSelector`, con ranking basato su CatBoost.
+
+La separazione tra `pipeline_training_model.py` e `final_model.py` evita di mescolare esperimenti, validazione interna, training finale e generazione della submission. In questo modo la pipeline sperimentale resta distinta dal workflow conclusivo di training, salvataggio del modello e inferenza sul test set.
 
 ---
 
-## Feature engineering
+## 6. Feature engineering e feature escluse
 
-La pipeline crea e mantiene le seguenti feature aggregate:
+La pipeline applica un feature engineering compatto e interpretabile. Alcuni gruppi di variabili originali vengono sintetizzati in feature aggregate per ridurre la dimensionalità e mantenere il segnale informativo.
 
-```text
-total_superstructure_count
-total_secondary_use_count
-has_fragile_material
-has_engineered_structure
-is_historic
-```
+Feature aggregate finali:
+
+| Feature                      | Significato                                                |
+| ---------------------------- | ---------------------------------------------------------- |
+| `total_superstructure_count` | numero di tecniche o materiali strutturali presenti        |
+| `total_secondary_use_count`  | numero di usi secondari associati all'edificio             |
+| `has_fragile_material`       | indicatore di materiali strutturali potenzialmente fragili |
+| `has_engineered_structure`   | indicatore di strutture più ingegnerizzate                 |
+| `is_historic`                | indicatore legato al valore speciale `age = 995`           |
 
 Decisioni principali:
 
-* `area_percentage` e `height_percentage` vengono mantenute come feature dimensionali originali;
-* `building_volume_proxy` è stata testata ma non mantenuta nella pipeline finale, perché ridondante rispetto ad `area_percentage` e `height_percentage`;
-* `total_secondary_use_count` sintetizza le feature originali `has_secondary_use_*`;
-* `total_superstructure_count`, `has_fragile_material` e `has_engineered_structure` sintetizzano le feature originali `has_superstructure_*`;
-* `age` viene mantenuta, ma il valore speciale `age = 995` viene gestito da `AgeHandler`;
-* `is_historic` conserva l'informazione associata al valore speciale `age = 995`;
-* `age_clipped` e `age_group` non vengono mantenute nella pipeline finale;
-* `count_floors_pre_eq` e `count_families` vengono mantenute nella forma originale.
+| Gruppo         | Decisione                                        | Motivazione                                        |
+| -------------- | ------------------------------------------------ | -------------------------------------------------- |
+| Dimensioni     | mantenere `area_percentage`, `height_percentage` | informazione diretta sulla dimensione              |
+| Volume proxy   | rimuovere `building_volume_proxy`                | ridondante rispetto ad area e altezza              |
+| Usi secondari  | comprimere `has_secondary_use_*`                 | riduce dimensionalità                              |
+| Superstruttura | comprimere `has_superstructure_*`                | mantiene segnale sui materiali                     |
+| Età            | mantenere `age`, creare `is_historic`            | conserva informazione utile e gestisce `age = 995` |
 
----
+La feature `building_volume_proxy` viene creata come feature candidata in fase sperimentale, ma viene rimossa dal `DataCleaner` nella configurazione finale. Va quindi interpretata come una feature testata e scartata, non come una feature finale del modello.
 
-## Feature rimosse
-
-Sono escluse dalla feature matrix finale:
+Feature escluse dalla matrice finale:
 
 ```text
 building_id
@@ -287,113 +272,139 @@ has_secondary_use_*
 has_superstructure_*
 ```
 
-Motivazione sintetica:
+Razionale sintetico:
 
-* `building_id` è un identificativo tecnico;
-* `damage_grade` è il target;
-* `building_volume_proxy` è ridondante rispetto ad `area_percentage` e `height_percentage`;
-* le feature derivate da `age`, `count_families` e `count_floors_pre_eq` non hanno mostrato vantaggio sufficiente rispetto alle variabili grezze;
-* `plan_configuration` e `legal_ownership_status` sono state rimosse per bassa informatività e distribuzione fortemente sbilanciata;
-* le feature originali di uso secondario e superstruttura sono state compresse in aggregati interpretabili.
+| Gruppo                       | Feature rimosse                                | Motivazione                              |
+| ---------------------------- | ---------------------------------------------- | ---------------------------------------- |
+| Identificativi               | `building_id`                                  | identificativo tecnico, non predittore   |
+| Target                       | `damage_grade`                                 | escluso per evitare leakage              |
+| Proxy dimensionali           | `building_volume_proxy`                        | ridondante                               |
+| Derivate da età              | `age_clipped`, `age_group`                     | non superiori a `age`                    |
+| Derivate da conteggi         | `family_count_group`, `floor_count_group`      | non superiori alle variabili originali   |
+| Categoriche poco informative | `plan_configuration`, `legal_ownership_status` | bassa utilità sperimentale               |
+| Usi secondari                | `has_secondary_use_*`                          | compressi in `total_secondary_use_count` |
+| Superstruttura               | `has_superstructure_*`                         | compressi in aggregati strutturali       |
 
 ---
 
-## Encoding geografico
+## 7. Encoding geografico
 
-Le variabili geografiche sono codificate come numeri, ma rappresentano identificativi geografici. Non vengono quindi trattate come variabili numeriche continue.
+Le variabili geografiche del dataset sono codificate come numeri, ma rappresentano identificativi territoriali. Per questo motivo non vengono trattate come variabili numeriche continue.
+
+Variabili considerate:
+
+```text
+geo_level_1_id
+geo_level_2_id
+geo_level_3_id
+```
 
 Strategia finale:
 
-```text
-geo_level_1_id → one-hot encoding
-geo_level_2_id → frequency encoding
-geo_level_3_id → frequency encoding
-```
+| Feature          | Strategia          | Motivazione           |
+| ---------------- | ------------------ | --------------------- |
+| `geo_level_1_id` | one-hot encoding   | cardinalità gestibile |
+| `geo_level_2_id` | frequency encoding | cardinalità alta      |
+| `geo_level_3_id` | frequency encoding | cardinalità alta      |
 
-Motivazione:
+Il `FrequencyEncoder` viene fittato solo sul training set o sul fold di training durante la validazione. In questo modo la codifica delle aree geografiche non utilizza informazioni provenienti dal validation set o dal test set.
 
-* `geo_level_1_id` ha cardinalità gestibile;
-* `geo_level_2_id` e `geo_level_3_id` hanno cardinalità elevata;
-* il one-hot completo delle variabili geografiche granulari produrrebbe una matrice troppo ampia e sparsa;
-* il frequency encoding conserva un segnale geografico compatto;
-* il frequency encoding viene fittato solo sul training set, evitando leakage tra train e validation.
+La scelta combina due esigenze:
 
----
-
-## Modelli
-
-La pipeline supporta:
-
-```text
-RandomForest
-XGBoost
-LightGBM
-VotingEnsemble
-StackingEnsemble
-```
-
-Sono inoltre disponibili baseline preliminari:
-
-```text
-DummyClassifier
-LogisticRegression
-DecisionTree
-```
-
-Decisioni principali:
-
-* RandomForest resta una baseline avanzata stabile e interpretabile;
-* XGBoost è il modello finale selezionato;
-* LightGBM è competitivo ma inferiore a XGBoost nella configurazione corrente;
-* VotingEnsemble e StackingEnsemble sono utili come confronto, ma non vengono preferiti automaticamente;
-* `models_to_run` permette di eseguire solo un sottoinsieme di modelli.
+| Esigenza                                        | Soluzione                                                 |
+| ----------------------------------------------- | --------------------------------------------------------- |
+| rappresentare esplicitamente le aree principali | one-hot su `geo_level_1_id`                               |
+| evitare matrici sparse troppo grandi            | frequency encoding su `geo_level_2_id` e `geo_level_3_id` |
+| prevenire leakage                               | fit dell'encoder solo sui dati di training                |
+| mantenere compattezza della pipeline            | trasformazioni integrate in `src/preprocessing/`          |
 
 ---
 
-## Risultati
+## 8. Modelli
+
+La pipeline supporta baseline preliminari, modelli avanzati ed ensemble.
+
+| Categoria | Modello              | Ruolo                                      |
+| --------- | -------------------- | ------------------------------------------ |
+| Baseline  | `DummyClassifier`    | riferimento minimo                         |
+| Baseline  | `LogisticRegression` | baseline lineare                           |
+| Baseline  | `DecisionTree`       | baseline non lineare semplice              |
+| Avanzato  | `RandomForest`       | modello base dello stacking e confronto    |
+| Avanzato  | `XGBoost`            | modello avanzato più competitivo da solo   |
+| Avanzato  | `LightGBM`           | modello base dello stacking e confronto    |
+| Ensemble  | `VotingEnsemble`     | confronto ensemble                         |
+| Ensemble  | `StackingEnsemble`   | modello finale                             |
+
+Il modello finale selezionato è `StackingEnsemble`. Lo stacking combina RandomForest, XGBoost e LightGBM, sfruttando modelli base già ottimizzati. XGBoost rimane il modello singolo più forte nel confronto avanzato, ma la configurazione finale adotta lo stacking per la submission conclusiva e per il miglior risultato pubblico ottenuto.
+
+---
+
+## 9. Risultati
+
+I risultati sono divisi in tre livelli:
+
+1. baseline preliminari;
+2. confronto tra modelli avanzati;
+3. configurazione finale e submission.
 
 ### Baseline preliminari
 
-Risultati indicativi delle baseline preliminari:
+Le baseline preliminari servono come riferimento iniziale per misurare la progressione metodologica.
 
-```text
-DummyClassifier       micro-F1 ≈ 0.569
-LogisticRegression    micro-F1 ≈ 0.592
-DecisionTree          micro-F1 ≈ 0.643
-```
+| Modello            | micro-F1 indicativa |
+| ------------------ | ------------------: |
+| DummyClassifier    |             ≈ 0.569 |
+| LogisticRegression |             ≈ 0.592 |
+| DecisionTree       |             ≈ 0.643 |
 
-Queste baseline servono come riferimento iniziale e non vanno confrontate direttamente con gli esperimenti avanzati se non come progressione metodologica.
+Questi risultati non vengono mischiati con il confronto avanzato finale, perché appartengono a una fase preliminare del progetto.
 
 ### Confronto modelli avanzati
 
-Risultati della configurazione avanzata senza feature selection, senza PCA e senza tuning:
+Risultati ottenuti nella configurazione avanzata senza feature selection, senza PCA, senza sample weighting e senza tuning:
 
 ```text
-RandomForest      micro-F1 0.716160 | macro-F1 0.645689 | weighted-F1 0.704259
-XGBoost           micro-F1 0.741889 | macro-F1 0.687747 | weighted-F1 0.735980
-LightGBM          micro-F1 0.727615 | macro-F1 0.664767 | weighted-F1 0.719590
-VotingEnsemble    micro-F1 0.735462 | macro-F1 0.673930 | weighted-F1 0.727158
-StackingEnsemble  micro-F1 0.741851 | macro-F1 0.688311 | weighted-F1 0.736433
+feature_selection = False
+use_pca = False
+use_sample_weight = False
+do_tuning = False
+split_strategy = 2
 ```
 
-Decisione:
+| Rank | Modello          | micro-F1 | macro-F1 | weighted-F1 | Nota                   |
+| ---: | ---------------- | -------: | -------: | ----------: | ---------------------- |
+|    1 | XGBoost          | 0.741889 | 0.687747 |    0.735980 | migliore modello singolo |
+|    2 | StackingEnsemble | 0.741851 | 0.688311 |    0.736433 | quasi equivalente      |
+|    3 | VotingEnsemble   | 0.735462 | 0.673930 |    0.727158 | buon ensemble          |
+|    4 | LightGBM         | 0.727615 | 0.664767 |    0.719590 | competitivo            |
+|    5 | RandomForest     | 0.716160 | 0.645689 |    0.704259 | stabile/interpretabile |
 
-* `XGBoost` ottiene la micro-F1 interna più alta;
-* `StackingEnsemble` è quasi equivalente e ottiene macro-F1 e weighted-F1 leggermente migliori;
-* poiché la metrica principale è micro-F1, `XGBoost` è il modello finale più difendibile;
-* la maggiore semplicità di XGBoost rispetto allo stacking rafforza la scelta finale.
+Questa tabella documenta il confronto sperimentale tra modelli avanzati. XGBoost risulta il migliore modello singolo, mentre lo stacking ottiene valori quasi equivalenti e leggermente migliori su macro-F1 e weighted-F1.
+
+### Configurazione finale
+
+La configurazione finale consegnata usa:
+
+```text
+modello: StackingEnsemble
+feature selection: sì, metodo ctb
+PCA: no
+sample weighting: no
+tuning: sì
+training finale: tutto il training set disponibile
+```
+
+Risultato di validazione interna della configurazione finale:
+
+| Modello finale    | micro-F1 indicativa |
+| ----------------- | ------------------: |
+| StackingEnsemble  |            ≈ 0.740423 |
+
+Il valore interno non va letto come unico criterio assoluto, perché deriva da una configurazione di validazione diversa rispetto al confronto avanzato precedente. La scelta conclusiva è stata guidata dalla configurazione finale integrata e dal risultato pubblico della submission.
 
 ### Submission finale
 
-La submission finale è stata generata usando:
-
-```text
-modello: XGBoost
-feature selection: no
-PCA: no
-tuning: no
-training finale: tutto il training set disponibile
-```
+La submission finale è stata generata con `StackingEnsemble`, addestrato sul training set completo e applicato al test set.
 
 File prodotto:
 
@@ -401,239 +412,176 @@ File prodotto:
 outputs/submissions/final_submission.csv
 ```
 
-Risultati pubblici:
+Risultato pubblico:
 
-```text
-XGBoost           public score = 0.7397
-StackingEnsemble  public score = 0.7384
-```
+| Modello finale    | Public score |
+| ----------------- | -----------: |
+| StackingEnsemble  |       0.7419 |
 
-La scelta finale rimane quindi `XGBoost`, coerentemente con la validazione interna e con il risultato pubblico.
+Distribuzione delle predizioni sul test set:
 
----
-
-## Feature selection
-
-La feature selection è integrata come step opzionale tramite:
-
-```text
-src/featureselector.py
-```
-
-Il selector viene inserito dopo preprocessing e prima del modello:
-
-```text
-preprocessing
-→ FeatureSelector
-→ model
-```
-
-Metodi supportati:
-
-```text
-rf           Random Forest importance
-xgb          XGBoost importance
-ctb          CatBoost importance
-corr_matrix  correlazione con il target
-chi2         Chi-square
-mu           mutual information
-rlf          ReliefF
-rfe          Recursive Feature Elimination
-sfs          Sequential Feature Selection
-```
-
-I metodi basati su XGBoost, CatBoost, ReliefF, RFE o SFS possono essere più pesanti e dipendono dalla configurazione dell'ambiente.
-
-Risultati osservati con Feature Selection RF a 30 feature, senza PCA e senza tuning:
-
-```text
-RandomForest      micro-F1 0.713858
-XGBoost           micro-F1 0.738109
-LightGBM          micro-F1 0.721859
-VotingEnsemble    micro-F1 0.731529
-StackingEnsemble  micro-F1 0.737380
-```
-
-Conclusione:
-
-* la feature selection funziona ed è leak-safe se usata dentro la pipeline;
-* 30 feature risultano troppo aggressive nella configurazione testata;
-* la configurazione testata peggiora rispetto alla baseline avanzata senza feature selection;
-* la feature selection resta disponibile come strumento opzionale, ma non viene adottata nella pipeline finale.
+| Classe | Numero predizioni |
+| -----: | ----------------: |
+|      1 |              6176 |
+|      2 |             56466 |
+|      3 |             24226 |
 
 ---
 
-## PCA
+## 10. Esperimenti e decisioni non finali
 
-La PCA è integrata come step opzionale nella pipeline.
+La pipeline supporta diversi step opzionali. Alcuni sono stati adottati nella configurazione finale, altri sono rimasti come esperimenti.
 
-Quando `use_pca=True`, la pipeline forza automaticamente lo scaling numerico:
+| Componente        | Stato finale | Motivazione sintetica                                      |
+| ----------------- | ------------ | ---------------------------------------------------------- |
+| Feature selection | adottata     | usata con metodo `ctb` nella pipeline finale               |
+| PCA               | non adottata | peggiora sensibilmente la micro-F1                         |
+| Sample weighting  | non adottato | può aiutare classi minoritarie, ma rischia di ridurre micro-F1 |
+| Tuning            | adottato     | usato per ottimizzare i modelli base dello stacking        |
 
-```text
-preprocessing
-→ scaling
-→ PCA
-→ model
-```
+Risultati sperimentali rilevanti:
 
-Risultati osservati con PCA a 40 componenti, senza feature selection e senza tuning:
+| Esperimento                      | Modello       | micro-F1 indicativa |
+| -------------------------------- | ------------- | ------------------: |
+| Feature selection RF, 30 feature | XGBoost       |            ≈ 0.738109 |
+| PCA, 40 componenti               | XGBoost       |            ≈ 0.706049 |
+| Tuning XGBoost                   | XGBoost tuned |            ≈ 0.724813 |
 
-```text
-RandomForest      micro-F1 0.707949
-XGBoost           micro-F1 0.706049
-LightGBM          micro-F1 0.700620
-VotingEnsemble    micro-F1 0.710194
-StackingEnsemble  micro-F1 0.709944
-```
+Sintesi decisionale:
 
-Conclusione:
-
-* PCA 40 peggiora sensibilmente rispetto alla baseline avanzata senza PCA;
-* la PCA non viene adottata nella configurazione finale;
-* viene mantenuta come esperimento secondario utile per collegare il progetto agli argomenti del corso.
-
----
-
-## Sample weighting
-
-`sample_weight` è disponibile come opzione nella training pipeline.
-
-Decisione:
-
-* non usarlo come default;
-* mantenerlo come esperimento alternativo orientato alla macro-F1.
-
-Motivazione:
-
-* i pesi bilanciati possono aiutare le classi meno frequenti;
-* tuttavia possono penalizzare la micro-F1;
-* poiché la metrica principale è micro-F1, non sono usati come default.
+| Aspetto           | Decisione                                                           |
+| ----------------- | ------------------------------------------------------------------- |
+| Feature selection | mantenuta e adottata nella pipeline finale con metodo `ctb`         |
+| PCA               | mantenuta come esperimento metodologico, ma non adottata            |
+| Sample weighting  | disponibile, ma disattivato perché la metrica principale è micro-F1 |
+| Tuning            | adottato per i modelli base dello StackingEnsemble                  |
+| Pipeline finale   | StackingEnsemble ottimizzato con feature selection                       |
 
 ---
 
-## Tuning
+## 11. Esecuzione
 
-Il tuning è stato integrato e testato in più configurazioni.
-
-La pipeline distingue due casi:
-
-* se `feature_selection=True`, il tuning usa `FeatureSelectionTuner`;
-* se `feature_selection=False`, il tuning usa `ModelTuner` e ottimizza solo parametri del modello.
-
-Risultati sintetici:
+Prima di eseguire il progetto, verificare che i file della competizione siano presenti in:
 
 ```text
-Tuning + feature selection RF:
-miglior risultato osservato inferiore alla baseline avanzata senza tuning.
-
-Tuning senza feature selection:
-miglior risultato osservato inferiore alla configurazione finale XGBoost.
-
-Tuning solo XGBoost:
-XGBoost micro-F1 0.724813 | macro-F1 0.661019 | weighted-F1 0.716496
+data/raw/
 ```
 
-Conclusione:
-
-* il tuning funziona tecnicamente;
-* nessuna configurazione testata batte la baseline avanzata corrente;
-* la pipeline candidata finale non usa tuning.
-
----
-
-## Esecuzione
-
-Creazione ambiente virtuale:
+### Creazione ambiente virtuale
 
 ```bash
 python -m venv .venv
 ```
 
-Attivazione ambiente virtuale su macOS/Linux:
+### Attivazione ambiente virtuale
+
+Su macOS/Linux:
 
 ```bash
 source .venv/bin/activate
 ```
 
-Installazione dipendenze:
+Su Windows:
+
+```bash
+.venv\Scripts\activate
+```
+
+### Installazione dipendenze
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Su macOS, se XGBoost o LightGBM danno errore legato a librerie native:
+Su macOS, se XGBoost o LightGBM danno errori legati a librerie native:
 
 ```bash
 brew install libomp
 ```
 
-### Help CLI
+### Comandi principali
+
+Mostrare l'help della CLI:
 
 ```bash
 python main.py --help
 ```
 
-Comandi disponibili:
-
-```text
-evaluate-final
-compare-models
-make-submission
-```
-
-### Valutazione candidato finale
+Valutare rapidamente un modello candidato senza tuning:
 
 ```bash
 python main.py evaluate-final
 ```
 
-Output atteso:
+Valutare esplicitamente un modello:
 
-```text
-XGBoost micro-F1 ≈ 0.741889
+```bash
+python main.py evaluate-final --model XGBoost
+python main.py evaluate-final --model StackingEnsemble
 ```
 
-### Confronto modelli avanzati
+Confrontare tutti i modelli avanzati:
 
 ```bash
 python main.py compare-models
 ```
 
-Il comando salva i risultati in:
-
-```text
-outputs/metrics/results_comparison.csv
-```
-
-È possibile selezionare un sottoinsieme di modelli:
+Confrontare solo alcuni modelli:
 
 ```bash
 python main.py compare-models --models XGBoost,LightGBM,StackingEnsemble
 ```
 
-### Generazione submission finale
+Addestrare e salvare la pipeline finale:
+
+```bash
+python main.py train-final
+```
+
+Generare la submission finale rieseguendo il training finale:
 
 ```bash
 python main.py make-submission
 ```
 
-Il comando salva la submission in:
-
-```text
-outputs/submissions/final_submission.csv
-```
-
-È possibile specificare il modello:
+Generare la submission da modello già salvato:
 
 ```bash
-python main.py make-submission --model XGBoost
+python main.py make-submission --from-saved-model
+```
+
+Riepilogo operativo:
+
+- Help CLI: `python main.py --help`
+- Validazione rapida: `python main.py evaluate-final`
+- Confronto modelli: `python main.py compare-models`
+- Training finale: `python main.py train-final`
+- Submission da training finale: `python main.py make-submission`
+- Submission da modello salvato: `python main.py make-submission --from-saved-model`
+
+Gli output principali prodotti dai comandi sono:
+
+| Comando | Output principale |
+| ------- | ---------------- |
+| `python main.py compare-models` | `outputs/metrics/results_comparison.csv` |
+| `python main.py train-final` | `models/final_pipeline.joblib` |
+| `python main.py make-submission` | `outputs/submissions/final_submission.csv` |
+| `python main.py make-submission --from-saved-model` | `outputs/submissions/final_submission.csv` |
+
+Output principali:
+
+```text
+outputs/metrics/results_comparison.csv
+outputs/metrics/final_model_config.json
+outputs/submissions/final_submission.csv
+models/final_pipeline.joblib
 ```
 
 ---
 
-## Notebook
+## 12. Notebook
 
-Notebook principali:
+I notebook documentano il percorso analitico del progetto. La logica stabile non è nei notebook, ma nella cartella `src/`.
 
 ```text
 notebooks/
@@ -646,82 +594,88 @@ notebooks/
 └── 07_tuning_final_evaluation.ipynb
 ```
 
-Ruolo dei notebook:
+| Notebook                                      | Ruolo                                    |
+| --------------------------------------------- | ---------------------------------------- |
+| `01_analisi_dati.ipynb`                       | EDA iniziale                             |
+| `02_qualita_dati.ipynb`                       | data quality                             |
+| `03_feature_comprehension.ipynb`              | comprensione delle feature               |
+| `04_preprocessing_feature_engineering.ipynb`  | preprocessing e feature engineering      |
+| `05_baseline_modeling.ipynb`                  | baseline preliminari                     |
+| `06_model_comparison_feature_selection.ipynb` | model comparison, feature selection, PCA |
+| `07_tuning_final_evaluation.ipynb`            | tuning e valutazione finale              |
 
-* `01_analisi_dati.ipynb`: analisi esplorativa iniziale;
-* `02_qualita_dati.ipynb`: qualità dati e data quality;
-* `03_feature_comprehension.ipynb`: comprensione semantica delle feature;
-* `04_preprocessing_feature_engineering.ipynb`: preprocessing e feature engineering;
-* `05_baseline_modeling.ipynb`: baseline preliminare;
-* `06_model_comparison_feature_selection.ipynb`: confronto modelli, feature selection e PCA;
-* `07_tuning_final_evaluation.ipynb`: tuning e valutazione finale.
+Relazione tra notebook e codice stabile:
 
-I notebook servono come supporto analitico e narrativo. La logica stabile finale si trova in `src/`.
-
----
-
-## Documentazione
-
-Documenti principali:
-
-```text
-docs/
-└── decision_log.md
-```
-
-`docs/decision_log.md` contiene il razionale delle principali decisioni metodologiche:
-
-* target e metrica principale;
-* feature mantenute e rimosse;
-* feature engineering;
-* encoding geografico;
-* preprocessing finale;
-* model comparison;
-* feature selection;
-* PCA;
-* sample weighting;
-* tuning;
-* scelta finale.
-
-Il README fornisce una panoramica sintetica del progetto e istruzioni operative.
+| Livello      | Ruolo                                                     |
+| ------------ | --------------------------------------------------------- |
+| `notebooks/` | analisi, visualizzazioni, esperimenti e interpretazioni   |
+| `src/`       | codice stabile, riutilizzabile e integrato nella pipeline |
+| `outputs/`   | metriche, figure e submission generate                    |
 
 ---
 
-## Stato attuale
+## 13. Documentazione
 
-Stato aggiornato:
+La documentazione principale è composta da:
 
-* feature set compatto implementato;
-* pipeline ufficiale implementata nel package `src/preprocessing/`;
-* configurazione finale centralizzata in `src/config.py`;
-* entry point CLI disponibile in `main.py`;
-* encoding geografico ibrido implementato;
-* `AgeHandler` integrato per gestire `age = 995`;
-* `FeatureSelector` disponibile come step opzionale e leak-safe;
-* PCA integrata come step opzionale, ma non adottata nella pipeline finale;
-* `sample_weight` disponibile ma non usato come default;
-* XGBoost selezionato come modello finale;
-* StackingEnsemble mantenuto come alternativa quasi equivalente;
-* tuning testato ma non adottato;
-* submission finale generata e valutata sulla leaderboard pubblica;
-* documentazione metodologica dettagliata disponibile in `docs/decision_log.md`.
+| Documento              | Ruolo                                        |
+| ---------------------- | -------------------------------------------- |
+| `README.md`            | guida principale, setup, pipeline, risultati |
+| `docs/decision_log.md` | razionale metodologico più dettagliato       |
 
----
+Il file `docs/decision_log.md` contiene dettagli su:
 
-## Prossimi step
+| Area                      | Contenuto                                                        |
+| ------------------------- | ---------------------------------------------------------------- |
+| target e metriche         | definizione del task e scelta della micro-F1                     |
+| feature mantenute/rimosse | razionale delle decisioni sul feature set                        |
+| feature engineering       | motivazione delle feature aggregate                              |
+| encoding geografico       | gestione di `geo_level_1_id`, `geo_level_2_id`, `geo_level_3_id` |
+| preprocessing             | struttura della pipeline finale                                  |
+| model comparison          | confronto tra baseline, modelli avanzati ed ensemble             |
+| feature selection         | metodo adottato e alternative testate                            |
+| PCA                       | esperimenti di riduzione dimensionale                            |
+| sample weighting          | valutazione dell'opzione                                         |
+| tuning                    | tuning dei modelli base e configurazioni testate                 |
+| scelta finale             | selezione dello StackingEnsemble                                 |
 
-* eseguire un controllo finale della repository;
-* verificare coerenza tra README, `docs/decision_log.md`, report e presentazione;
-* preparare report finale;
-* preparare presentazione;
-* consolidare il branch `dev`;
-* effettuare merge finale su `main`.
+Il README è pensato per comprendere rapidamente obiettivo, esecuzione e risultati. Il decision log conserva il dettaglio metodologico necessario per ricostruire le scelte progettuali.
 
 ---
 
-## Team
+## 14. Stato finale del progetto
 
-* Gianluca
-* Nicola
-* Mattia
-* Claudia
+Il progetto è in versione finale di consegna. Codice, pipeline, submission, documentazione tecnica, decision log e presentazione sono stati completati e verificati.
+
+| Elemento               | Stato                                      |
+| ---------------------- | ------------------------------------------ |
+| Pipeline ufficiale     | implementata e verificata                  |
+| Preprocessing modulare | implementato in `src/preprocessing/`       |
+| Feature engineering    | implementato                               |
+| Encoding geografico    | implementato                               |
+| Feature selection      | implementata e adottata nella pipeline finale |
+| Tuning                 | implementato e adottato per i modelli base |
+| Model comparison       | completato                                 |
+| StackingEnsemble       | selezionato come modello finale            |
+| Training finale        | completato sul training set disponibile    |
+| Pipeline salvata       | generata come `models/final_pipeline.joblib` |
+| Submission finale      | generata in `outputs/submissions/final_submission.csv` |
+| Public score           | `0.7419`                                   |
+| CLI                    | disponibile tramite `main.py`              |
+| Risultati              | salvati in `outputs/`                      |
+| README                 | aggiornato alla versione finale            |
+| Decision log           | completato in `docs/decision_log.md`       |
+| Presentazione          | completata                                 |
+
+La versione finale del repository è pensata per essere riproducibile a partire dai dati raw, tramite i comandi CLI documentati nella sezione di esecuzione.
+
+---
+
+## 15. Team
+
+| Nome     |
+| -------- |
+| Gianluca |
+| Nicola   |
+| Mattia   |
+| Claudia  |
